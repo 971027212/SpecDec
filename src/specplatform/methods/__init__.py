@@ -5,9 +5,12 @@ request loop，也不直接写 metrics/timing。
 """
 
 from specplatform.methods.base import AcceptancePolicy, CandidateStrategy, PlanningPolicy
+from specplatform.methods.linear import GreedyPrefixAcceptancePolicy, LinearCandidateStrategy
 
 __all__ = [
     "AcceptancePolicy",
     "CandidateStrategy",
+    "GreedyPrefixAcceptancePolicy",
+    "LinearCandidateStrategy",
     "PlanningPolicy",
 ]

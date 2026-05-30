@@ -43,6 +43,12 @@ D:\specDec
     test_timing_phase1.py
     test_metrics_schema.py
     test_cleanup_step0.py
+    test_greedy_draft_runner.py
+    test_model_interface.py
+    test_minimal_speculative_loop.py
+  scripts/
+    a100_target_service.py
+    3090_speculative_smoke.py
   README.md
   PROJECT_STRUCTURE.md
 ```
@@ -88,12 +94,14 @@ backends, or record metrics side effects.
 ### runtime/
 
 Unified runtime execution layer. It executes an `ExecutablePlan` and must not
-branch on method names.
+branch on method names. The current loop is:
+`scheduler -> draft -> candidate -> verifier -> acceptance -> append`.
 
 ### methods/
 
 Algorithm difference layer. It owns strategies, policies, and planning hints;
-it must not contain a full request loop.
+it must not contain a full request loop. Current minimal method components are
+`LinearCandidateStrategy` and `GreedyPrefixAcceptancePolicy`.
 
 ### schedulers/
 
@@ -108,7 +116,8 @@ now runs a `CausalLMRunner` greedily and returns raw `DraftGeneration` tokens.
 ### verification/
 
 Unified verifier API. HTTP, Torch, A100, or 3090 target-service integrations
-belong behind `VerifierBackend`.
+belong behind `VerifierBackend`. Current minimal implementations are
+`LinearVerifier`, `LinearVerifyRequest/Response`, and `HttpLinearVerifierClient`.
 
 ### metrics/
 
@@ -122,7 +131,8 @@ shared spans and is not a real measured span.
 ### model/
 
 Model runner abstraction. `CausalLMRunner` defines the minimal real causal LM
-interface; Transformers implementations are added in later steps.
+interface; `TransformersCausalLMRunner` adapts local Hugging Face causal LM
+weights without owning a generation loop.
 
 ## Target Placement Rule
 
@@ -142,10 +152,12 @@ target_device
 ## Tests
 
 ```text
-tests/test_unified_runtime_phase1.py
 tests/test_timing_phase1.py
 tests/test_metrics_schema.py
 tests/test_cleanup_step0.py
+tests/test_greedy_draft_runner.py
+tests/test_model_interface.py
+tests/test_minimal_speculative_loop.py
 ```
 
 Coverage includes:
@@ -158,6 +170,9 @@ Coverage includes:
 - timing spans, request attribution, and summaries do not double-count time.
 - `PhaseEvent`, `CandidateTree`, and target placement schema basics.
 - active fake/baseline modules have been removed.
+- draft proposal is verified.
+- accepted/bonus tokens are written back to `GenerationSession`.
+- runtime contains no method-name branch.
 
 ## Verify
 
@@ -165,5 +180,5 @@ PowerShell:
 
 ```powershell
 $env:PYTHONPATH = "src"
-python -m unittest tests.test_timing_phase1 tests.test_metrics_schema tests.test_cleanup_step0 -v
+python -m unittest discover -s tests -v
 ```

@@ -5,10 +5,12 @@ model 层只描述模型 forward/prefill/reset 的接口。真实模型加载和
 """
 
 from specplatform.model.base import CausalLMRunner, ModelForwardInput, ModelForwardOutput, ModelRunner
+from specplatform.model.transformers import TransformersCausalLMRunner
 
 __all__ = [
     "CausalLMRunner",
     "ModelForwardInput",
     "ModelForwardOutput",
     "ModelRunner",
+    "TransformersCausalLMRunner",
 ]

@@ -32,6 +32,12 @@ D:\specDec_archives\legacy_20260530
 
 - `CandidateProposal`
 - `CausalLMRunner`
+- `TransformersCausalLMRunner`
+- `GreedyDraftRunner`
+- `LinearCandidateStrategy`
+- `LinearVerifier`
+- `HttpLinearVerifierClient`
+- `GreedyPrefixAcceptancePolicy`
 - `VerificationResult`
 - `AcceptResult`
 - `ExecutablePlan`
@@ -56,8 +62,34 @@ D:\specDec_archives\legacy_20260530
 ```
 
 The fake runners and baseline loop have been removed from active code. Real
-model, draft, verifier, acceptance, HTTP service, and HTTP client components are
-added in later small steps.
+model interface, draft runner, linear candidate strategy, verifier contract,
+acceptance policy, unified runtime loop, A100 HTTP service, and 3090 HTTP client
+are now implemented for the minimal single-request linear path.
+
+## Smoke Commands
+
+A100 target service:
+
+```bash
+cd /data/chajiahao/specDec
+PYTHONPATH=src /data/chajiahao/miniconda3/envs/specedge/bin/python \
+  scripts/a100_target_service.py \
+  --model-path /data/chajiahao/hf_models/Qwen3-14B \
+  --host 0.0.0.0 \
+  --port 8010
+```
+
+3090 draft-side smoke:
+
+```bash
+cd /home/chajiahao/data/specDec
+PYTHONPATH=src /home/chajiahao/miniconda3/bin/python \
+  scripts/3090_speculative_smoke.py \
+  --draft-model-path /home/chajiahao/data/hf_models/Qwen3-1.7B \
+  --target-url http://a100-specdec:8010 \
+  --max-new-tokens 16 \
+  --draft-tokens 4
+```
 
 ## Target Placement
 
@@ -83,7 +115,7 @@ PowerShell:
 
 ```powershell
 $env:PYTHONPATH = "src"
-python -m unittest tests.test_timing_phase1 tests.test_metrics_schema tests.test_cleanup_step0 -v
+python -m unittest discover -s tests -v
 ```
 
 See `PROJECT_STRUCTURE.md` for the active tree and package boundaries.
