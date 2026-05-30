@@ -16,7 +16,6 @@ from specplatform.core import (
     VerificationResult,
 )
 from specplatform.methods.base import AcceptancePolicy, CandidateStrategy
-from specplatform.model import ModelForwardInput
 
 
 @dataclass
@@ -32,45 +31,38 @@ class FakeLinearCandidateStrategy(CandidateStrategy):
         budget: DraftBudget,
         context: RuntimeContext,
     ) -> CandidateProposal:
-        """按 draft budget 逐步调用 draft runner，拼出一条 linear proposal。"""
-        tokens: list[int] = []
-        forward_ms: list[float] = []
-        intervals: list[dict[str, int]] = []
-        cursor = session.prefix_ids[-1]
+        """按 draft budget 向 draft runner 请求一条 linear proposal。"""
         max_tokens = min(max(1, budget.max_tokens), session.remaining_tokens)
-        for offset in range(max_tokens):
-            output = draft_runner.forward(
-                ModelForwardInput(
-                    input_ids=[cursor],
-                    position_ids=[len(session.prefix_ids) + offset - 1],
-                    metadata={"method": self.method_name, "request_id": session.request_id},
-                )
-            )
-            token_id = _argmax(output.logits[0])
-            tokens.append(token_id)
-            forward_ms.append(output.timing_ms)
-            if output.start_ns is not None and output.end_ns is not None:
-                intervals.append({"start_ns": output.start_ns, "end_ns": output.end_ns})
-            cursor = token_id
+        draft_generation = draft_runner.generate_tokens(
+            prefix_ids=session.prefix_ids,
+            max_tokens=max_tokens,
+            request_id=session.request_id,
+            metadata={"method": self.method_name},
+        )
         timing = {
-            "draft_generate": sum(forward_ms),
-            "forward": forward_ms,
+            "draft_generate": sum(draft_generation.forward_timing_ms),
+            "forward": list(draft_generation.forward_timing_ms),
         }
-        if intervals:
-            timing["forward_intervals_ns"] = intervals
-            timing["start_ns"] = min(item["start_ns"] for item in intervals)
-            timing["end_ns"] = max(item["end_ns"] for item in intervals)
+        if draft_generation.forward_intervals_ns:
+            timing["forward_intervals_ns"] = list(draft_generation.forward_intervals_ns)
+            timing["start_ns"] = min(
+                item["start_ns"] for item in draft_generation.forward_intervals_ns
+            )
+            timing["end_ns"] = max(
+                item["end_ns"] for item in draft_generation.forward_intervals_ns
+            )
         return CandidateProposal(
             proposal_id=f"{session.request_id}:step{session.step_idx}:draft0",
             request_id=session.request_id,
             worker_id=getattr(draft_runner, "runner_id", None),
             shape="linear",
-            tokens=tokens,
-            draft_length=len(tokens),
+            tokens=list(draft_generation.tokens),
+            draft_length=len(draft_generation.tokens),
             timing=timing,
             metadata={
                 "method": self.method_name,
                 "prefix_ids": list(session.prefix_ids),
+                "draft_budget_max_tokens": budget.max_tokens,
             },
         )
 
@@ -102,8 +94,3 @@ class LinearPrefixAcceptancePolicy(AcceptancePolicy):
                 "accepted_prefix_len": accepted_count,
             },
         )
-
-
-def _argmax(values: list[float]) -> int:
-    """返回 logits 最大值所在的 token id。"""
-    return max(range(len(values)), key=lambda index: values[index])
