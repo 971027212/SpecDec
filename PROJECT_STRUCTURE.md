@@ -102,8 +102,8 @@ Request-to-worker, draft budget, and verify-batch planning.
 ### draft/
 
 Draft runner boundary. Draft code generates draft tokens only; it does not
-accept/reject tokens, call verifiers, or decide batches. The real greedy draft
-runner is added after the cleanup step.
+accept/reject tokens, call verifiers, or decide batches. `GreedyDraftRunner`
+now runs a `CausalLMRunner` greedily and returns raw `DraftGeneration` tokens.
 
 ### verification/
 

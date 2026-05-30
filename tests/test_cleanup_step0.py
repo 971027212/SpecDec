@@ -12,7 +12,6 @@ class CleanupStep0Test(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         removed = [
             "src/specplatform/model/fake.py",
-            "src/specplatform/draft/runner.py",
             "src/specplatform/methods/fake_linear.py",
             "src/specplatform/verification/fake_backend.py",
             "src/specplatform/runtime/autoregressive.py",
