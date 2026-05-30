@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""实验配置读取工具。
+
+配置模块只负责把 YAML/JSON 解析成普通字典，不参与 speculative decoding
+算法决策，也不直接创建 runtime、method 或 verifier。
+"""
+
 import json
 from pathlib import Path
 from typing import Any
@@ -8,10 +14,11 @@ import yaml
 
 
 class ConfigError(RuntimeError):
-    """Raised when an experiment config is missing or malformed."""
+    """配置文件缺失、格式错误或根结构不符合预期时抛出。"""
 
 
 def load_config(path: str | Path) -> dict[str, Any]:
+    """读取 YAML/JSON 配置，并要求配置根节点必须是 mapping。"""
     config_path = Path(path)
     if not config_path.exists():
         raise ConfigError(f"Config file does not exist: {config_path}")
@@ -29,6 +36,7 @@ def load_config(path: str | Path) -> dict[str, Any]:
 
 
 def get_in(config: dict[str, Any], path: tuple[str, ...], default: Any = None) -> Any:
+    """按层级路径读取嵌套配置；路径不存在时返回默认值。"""
     current: Any = config
     for key in path:
         if not isinstance(current, dict) or key not in current:
@@ -38,6 +46,7 @@ def get_in(config: dict[str, Any], path: tuple[str, ...], default: Any = None) -
 
 
 def as_list(value: Any, *, item_type: type | None = None) -> list[Any]:
+    """把配置里的单值、逗号字符串或 tuple 统一规范成 list。"""
     if value is None:
         items: list[Any] = []
     elif isinstance(value, list):
@@ -52,4 +61,3 @@ def as_list(value: Any, *, item_type: type | None = None) -> list[Any]:
     if item_type is not None:
         return [item_type(item) for item in items]
     return items
-

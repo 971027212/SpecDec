@@ -1,3 +1,5 @@
+"""timing / metrics Phase 1 行为测试。"""
+
 import csv
 import tempfile
 import unittest
@@ -11,17 +13,23 @@ from specplatform.timing.summary import summarize_timing_events
 
 
 class FakeClock:
+    """用固定 ns 序列替代真实时钟，保证 timing 测试稳定。"""
+
     def __init__(self, values: list[int]) -> None:
         self.values = list(values)
 
     def __call__(self) -> int:
+        """返回下一个预置时间戳。"""
         if not self.values:
             raise AssertionError("fake clock exhausted")
         return self.values.pop(0)
 
 
 class TimingPhase1Test(unittest.TestCase):
+    """验证 span、归因和 artifact 输出不会重复计算共享 batch。"""
+
     def test_timing_span_measures_finished_duration(self) -> None:
+        """已结束 span 应能计算毫秒耗时。"""
         span = TimingSpan(
             span_id="span_001",
             phase="verify.batch_total",
@@ -34,6 +42,7 @@ class TimingPhase1Test(unittest.TestCase):
         self.assertEqual(span.measured_duration_ms, 0.1)
 
     def test_timing_span_rejects_unfinished_or_negative_duration(self) -> None:
+        """未结束或时间倒退的 span 应被拒绝。"""
         unfinished = TimingSpan(
             span_id="span_001",
             phase="verify.batch_total",
@@ -56,6 +65,7 @@ class TimingPhase1Test(unittest.TestCase):
             _ = backwards.measured_duration_ms
 
     def test_recorder_span_generates_ids_and_bounds(self) -> None:
+        """TimingRecorder.span 应生成 id 并自动记录 end_ns。"""
         recorder = TimingRecorder(clock=FakeClock([10, 110]))
 
         with recorder.span(phase="scheduler.plan", method="fake_linear", plan_id="plan0") as span:
@@ -66,6 +76,7 @@ class TimingPhase1Test(unittest.TestCase):
         self.assertEqual(span.measured_duration_ms, 0.0001)
 
     def test_timing_span_does_not_carry_attribution_only_fields(self) -> None:
+        """TimingSpan 本身不携带 attribution-only 字段。"""
         names = {field.name for field in fields(TimingSpan)}
 
         self.assertNotIn("event_scope", names)
@@ -74,6 +85,7 @@ class TimingPhase1Test(unittest.TestCase):
         self.assertNotIn("parent_span_id", names)
 
     def test_event_from_span_creates_system_event(self) -> None:
+        """真实 span 转出的事件默认是 system event。"""
         recorder = TimingRecorder(clock=FakeClock([]))
         span = TimingSpan(
             span_id="span_001",
@@ -104,6 +116,7 @@ class TimingPhase1Test(unittest.TestCase):
         self.assertEqual(event.attributed_duration_ms, 100.0)
 
     def test_batch_attribution_links_to_parent_span(self) -> None:
+        """batch verifier 耗时应平均归因到每个 request。"""
         recorder = TimingRecorder(clock=FakeClock([]))
         span = TimingSpan(
             span_id="span_batch",
@@ -147,6 +160,7 @@ class TimingPhase1Test(unittest.TestCase):
         self.assertEqual(sum(event.attributed_duration_ms for event in events), 100.0)
 
     def test_summary_views_do_not_double_count_shared_batch(self) -> None:
+        """summary 视图区分真实耗时和 request 归因，避免双算。"""
         recorder = TimingRecorder(clock=FakeClock([]))
         span = TimingSpan(
             span_id="span_batch",
@@ -201,6 +215,7 @@ class TimingPhase1Test(unittest.TestCase):
             self.assertNotEqual(row.total_attributed_duration_ms, 200.0)
 
     def test_artifacts_include_timing_columns(self) -> None:
+        """CSV artifact 应包含 timing/attribution 所需列。"""
         recorder = TimingRecorder(clock=FakeClock([]))
         span = TimingSpan(
             span_id="span_batch",

@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""Phase 1 的 fake linear method。
+
+这个 fake method 用线性 proposal 验证 runtime 边界：strategy 只生成候选，
+acceptance policy 只消费验证结果，不直接访问验证后端。
+"""
+
 from dataclasses import dataclass
 
 from specplatform.core import (
@@ -15,6 +21,8 @@ from specplatform.model import ModelForwardInput
 
 @dataclass
 class FakeLinearCandidateStrategy(CandidateStrategy):
+    """使用 fake draft runner 生成线性 CandidateProposal。"""
+
     method_name: str = "fake_linear"
 
     def propose(
@@ -24,6 +32,7 @@ class FakeLinearCandidateStrategy(CandidateStrategy):
         budget: DraftBudget,
         context: RuntimeContext,
     ) -> CandidateProposal:
+        """按 draft budget 逐步调用 draft runner，拼出一条 linear proposal。"""
         tokens: list[int] = []
         forward_ms: list[float] = []
         intervals: list[dict[str, int]] = []
@@ -68,12 +77,15 @@ class FakeLinearCandidateStrategy(CandidateStrategy):
 
 @dataclass
 class LinearPrefixAcceptancePolicy(AcceptancePolicy):
+    """根据 accepted_prefix_len 接受 proposal 的线性前缀。"""
+
     def accept(
         self,
         proposal: CandidateProposal,
         verification_result: VerificationResult,
         context: RuntimeContext,
     ) -> AcceptResult:
+        """只消费 VerificationResult，不访问验证后端或 runtime。"""
         accepted_count = int(verification_result.accepted_prefix_len or 0)
         accepted = proposal.tokens[:accepted_count]
         rejected = proposal.tokens[accepted_count:]
@@ -93,4 +105,5 @@ class LinearPrefixAcceptancePolicy(AcceptancePolicy):
 
 
 def _argmax(values: list[float]) -> int:
+    """返回 logits 最大值所在的 token id。"""
     return max(range(len(values)), key=lambda index: values[index])

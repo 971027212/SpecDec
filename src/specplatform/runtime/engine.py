@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""统一 speculative runtime 引擎。
+
+RuntimeEngine 只编排通用流程：调 scheduler、执行 draft job、批量 verifier、
+调用 acceptance policy、写回 session、记录 timing/metrics。它不应该根据
+method 名称写分支。
+"""
+
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -16,6 +23,8 @@ from specplatform.verification import VerifierBackend
 
 @dataclass
 class RuntimeRequestResult:
+    """单个 request 的 runtime 输出摘要。"""
+
     request_id: str
     output_token_ids: list[int] = field(default_factory=list)
     proposals: list[str] = field(default_factory=list)
@@ -24,12 +33,16 @@ class RuntimeRequestResult:
 
 @dataclass
 class RuntimeRunResult:
+    """一次 runtime.run 的聚合结果。"""
+
     request_results: list[RuntimeRequestResult]
     events: EventLogger
 
 
 @dataclass
 class RuntimeEngine:
+    """统一运行引擎，通过注入策略对象保持 method 无关。"""
+
     candidate_strategy: CandidateStrategy
     acceptance_policy: AcceptancePolicy
     scheduler: Scheduler
@@ -47,6 +60,7 @@ class RuntimeEngine:
         context: RuntimeContext | None = None,
         max_rounds: int | None = None,
     ) -> RuntimeRunResult:
+        """执行多 request 的统一 draft/verify/accept/append 循环。"""
         context = context or RuntimeContext()
         logger = EventLogger()
         recorder = self.timing_recorder or TimingRecorder(clock=context.clock)
@@ -271,6 +285,7 @@ class RuntimeEngine:
         draft_runners: dict[str, Any],
         context: RuntimeContext,
     ) -> PlanHints:
+        """从可选 planning policy 读取 scheduler hint。"""
         if self.planning_policy is None:
             return PlanHints()
         return self.planning_policy.plan(
@@ -292,6 +307,7 @@ class RuntimeEngine:
         tokens_out: int | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
+        """把 TimingSpan 转成 PhaseEvent 并写入 logger。"""
         logger.record(
             event_from_span(
                 span,
@@ -306,14 +322,17 @@ class RuntimeEngine:
 
 
 def _method_label(context: RuntimeContext) -> str:
+    """从 run_config 中取展示用 method 名称；不用于 runtime 分支。"""
     return str(context.run_config.get("method", "unified_runtime"))
 
 
 def _min_start_ns(*spans: TimingSpan) -> int:
+    """聚合多个 span 的最早开始时间。"""
     return min(span.start_ns for span in spans)
 
 
 def _max_end_ns(*spans: TimingSpan) -> int:
+    """聚合多个已完成 span 的最晚结束时间。"""
     ends = [span.end_ns for span in spans if span.end_ns is not None]
     if len(ends) != len(spans):
         raise ValueError("Cannot aggregate unfinished TimingSpan.")

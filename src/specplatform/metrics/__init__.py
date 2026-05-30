@@ -1,3 +1,8 @@
+"""metrics 出口。
+
+metrics 层只记录事件和写 artifact，不参与 speculative decoding 的算法决策。
+"""
+
 from specplatform.metrics.artifacts import (
     write_phase_events_csv,
     write_phase_summary_csv,

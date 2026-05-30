@@ -1,4 +1,6 @@
-"""Speculative decoding experiment platform."""
+"""SpecPlatform 包入口。
+
+这里不放执行逻辑，只保留包版本等轻量元信息。
+"""
 
 __version__ = "0.1.0"
-

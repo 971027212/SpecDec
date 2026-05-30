@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""TimingSpan 到 PhaseEvent 的转换。"""
+
 from collections.abc import Callable
 
 from specplatform.core import PhaseEvent
@@ -7,6 +9,7 @@ from specplatform.timing.span import TimingSpan
 
 
 def phase_category(phase: str) -> str:
+    """根据 phase 前缀推导粗粒度类别。"""
     prefix = phase.split(".", maxsplit=1)[0]
     known = {
         "runtime",
@@ -31,6 +34,7 @@ def event_from_span(
     tokens_out: int | None = None,
     metadata: dict | None = None,
 ) -> PhaseEvent:
+    """把一个真实测量 span 转成 system 事件。"""
     measured = span.measured_duration_ms
     return PhaseEvent(
         event_id=event_id_factory(),
@@ -73,6 +77,7 @@ def attribution_event_from_span(
     tokens_out: int | None = None,
     metadata: dict | None = None,
 ) -> PhaseEvent:
+    """基于 parent span 生成 request-level attribution 事件。"""
     measured = span.measured_duration_ms
     return PhaseEvent(
         event_id=event_id_factory(),

@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""metrics artifact 写盘工具。
+
+这里把 runtime 产生的 PhaseEvent / request result 写成 CSV/JSON，不反向影响
+runtime 或 method 的决策。
+"""
+
 import csv
 import json
 from pathlib import Path
@@ -10,6 +16,7 @@ from specplatform.timing.summary import summarize_timing_events
 
 
 def write_phase_events_csv(events: list[PhaseEvent], path: str | Path) -> None:
+    """写逐事件明细 CSV。"""
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = [
@@ -47,6 +54,7 @@ def write_phase_events_csv(events: list[PhaseEvent], path: str | Path) -> None:
 
 
 def write_phase_summary_csv(events: list[PhaseEvent], path: str | Path) -> None:
+    """写按视图聚合后的 phase summary CSV。"""
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", newline="", encoding="utf-8") as handle:
@@ -70,6 +78,7 @@ def write_phase_summary_csv(events: list[PhaseEvent], path: str | Path) -> None:
 
 
 def write_request_results_json(results: list[Any], path: str | Path) -> None:
+    """写每个 request 的输出 token/proposal 摘要 JSON。"""
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     payload = [

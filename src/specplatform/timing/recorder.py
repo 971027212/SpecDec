@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""TimingSpan 记录器。
+
+RuntimeEngine 用它创建 span；TimingRecorder 本身只负责测量和编号，不知道
+speculative decoding 的算法细节。
+"""
+
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -15,16 +21,20 @@ Clock = Callable[[], int]
 
 @dataclass
 class TimingRecorder:
+    """管理 span/event id，并提供 context manager 形式的计时 API。"""
+
     clock: Clock = time.perf_counter_ns
     spans: list[TimingSpan] = field(default_factory=list)
     _span_counter: int = 0
     _event_counter: int = 0
 
     def next_span_id(self) -> str:
+        """生成稳定递增的 span id。"""
         self._span_counter += 1
         return f"span_{self._span_counter:06d}"
 
     def next_event_id(self) -> str:
+        """生成稳定递增的 event id。"""
         self._event_counter += 1
         return f"evt_{self._event_counter:06d}"
 
@@ -45,6 +55,7 @@ class TimingRecorder:
         shared: bool = False,
         metadata: dict[str, Any] | None = None,
     ) -> Iterator[TimingSpan]:
+        """创建一个自动 finish 的 TimingSpan。"""
         timing_span = TimingSpan(
             span_id=self.next_span_id(),
             phase=phase,
@@ -85,6 +96,7 @@ class TimingRecorder:
         shared: bool = False,
         metadata: dict[str, Any] | None = None,
     ) -> TimingSpan:
+        """记录一个已经知道 start/end 的完成 span。"""
         timing_span = TimingSpan(
             span_id=self.next_span_id(),
             phase=phase,
@@ -107,6 +119,7 @@ class TimingRecorder:
         return timing_span
 
     def to_system_events(self, *, span_kind_by_phase: dict[str, str] | None = None):
+        """把已记录 span 批量转换成 system PhaseEvent。"""
         mapping = span_kind_by_phase or {}
         return [
             event_from_span(

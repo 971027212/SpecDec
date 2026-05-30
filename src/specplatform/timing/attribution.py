@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""共享耗时的 request 归因。
+
+例如 batch verifier 只真实测量一次，但 summary 需要知道每个 request 分到多少
+耗时；这里负责生成 attribution event。
+"""
+
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -10,6 +16,8 @@ from specplatform.timing.span import TimingSpan
 
 @dataclass
 class TimingAttributor:
+    """把 batch span 的 measured duration 分配给 proposal/request。"""
+
     def attribute_batch_average(
         self,
         *,
@@ -17,6 +25,7 @@ class TimingAttributor:
         proposals: list[CandidateProposal],
         event_id_factory: Callable[[], str],
     ) -> list[PhaseEvent]:
+        """按 request 数平均分摊 batch verifier 耗时。"""
         if not proposals:
             return []
         attributed_ms = parent_span.measured_duration_ms / len(proposals)

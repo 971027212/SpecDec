@@ -1,3 +1,9 @@
+"""core 公共数据模型出口。
+
+core 只定义跨模块共享的数据结构，不执行 request loop、不调用 verifier、
+不记录 timing/metrics 副作用。
+"""
+
 from specplatform.core.candidate import CandidateProposal, ProposalShape
 from specplatform.core.context import RuntimeContext
 from specplatform.core.plan import DraftBudget, DraftJob, ExecutablePlan, PlanHints, VerifyBatch

@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""timing 多视图汇总。
+
+summary 视图区分真实 system leaf、aggregate、request attribution，避免把
+共享 batch 耗时重复计算。
+"""
+
 from collections import defaultdict
 from dataclasses import dataclass
 
@@ -16,6 +22,8 @@ SUMMARY_VIEWS = (
 
 @dataclass(frozen=True)
 class TimingSummaryRow:
+    """一个 summary 分组的聚合结果。"""
+
     summary_view: str
     method: str
     phase: str
@@ -28,13 +36,16 @@ class TimingSummaryRow:
 
     @property
     def mean_measured_duration_ms(self) -> float:
+        """真实测量耗时均值。"""
         return self.total_measured_duration_ms / self.count if self.count else 0.0
 
     @property
     def mean_attributed_duration_ms(self) -> float:
+        """归因耗时均值。"""
         return self.total_attributed_duration_ms / self.count if self.count else 0.0
 
     def to_dict(self) -> dict[str, object]:
+        """转成 CSV writer 可直接写入的字典。"""
         return {
             "summary_view": self.summary_view,
             "method": self.method,
@@ -51,6 +62,7 @@ class TimingSummaryRow:
 
 
 def summarize_timing_events(events: list[PhaseEvent]) -> list[TimingSummaryRow]:
+    """生成所有标准 timing summary 视图。"""
     rows: list[TimingSummaryRow] = []
     rows.extend(_summarize_view(events, "system_leaf_summary", event_scope="system", span_kind="leaf"))
     rows.extend(
@@ -80,6 +92,7 @@ def _summarize_view(
     event_scope: str,
     span_kind: str,
 ) -> list[TimingSummaryRow]:
+    """按 event_scope/span_kind 选择事件并聚合。"""
     selected = [
         event
         for event in events
@@ -89,10 +102,12 @@ def _summarize_view(
 
 
 def _summarize_debug(events: list[PhaseEvent]) -> list[TimingSummaryRow]:
+    """debug 视图保留所有事件，便于检查事件总量。"""
     return _group_events(events, "debug_summary")
 
 
 def _group_events(events: list[PhaseEvent], summary_view: str) -> list[TimingSummaryRow]:
+    """按 method/phase/category/scope/kind 分组求和。"""
     grouped: dict[tuple[str, str, str, str, str], list[PhaseEvent]] = defaultdict(list)
     for event in events:
         grouped[

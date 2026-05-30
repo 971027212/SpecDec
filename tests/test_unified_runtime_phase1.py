@@ -1,3 +1,5 @@
+"""统一 runtime Phase 1 骨架测试。"""
+
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,7 +18,10 @@ from specplatform.verification import FakeProposalVerifier
 
 
 class UnifiedRuntimePhase1Test(unittest.TestCase):
+    """验证 fake method 能通过统一 runtime，并保持边界约束。"""
+
     def test_fake_linear_method_runs_through_unified_runtime(self) -> None:
+        """fake linear method 应能走完 draft/verify/accept/append 流程。"""
         sessions = [
             GenerationSession(request_id="req0", prompt_ids=[1, 2], max_new_tokens=2, max_len=16),
             GenerationSession(request_id="req1", prompt_ids=[3, 4], max_new_tokens=2, max_len=16),
@@ -47,6 +52,7 @@ class UnifiedRuntimePhase1Test(unittest.TestCase):
         self.assertIn("request.generation_total", phases)
 
     def test_shared_batch_verify_is_recorded_once_and_attributed_to_requests(self) -> None:
+        """共享 verify batch 只真实记录一次，再归因到各 request。"""
         sessions = [
             GenerationSession(request_id="req0", prompt_ids=[1, 2], max_new_tokens=1, max_len=16),
             GenerationSession(request_id="req1", prompt_ids=[3, 4], max_new_tokens=1, max_len=16),
@@ -96,6 +102,7 @@ class UnifiedRuntimePhase1Test(unittest.TestCase):
             self.assertEqual(event.parent_span_id, shared[0].span_id)
 
     def test_runtime_context_does_not_expose_execution_escape_hatches(self) -> None:
+        """RuntimeContext 不应暴露 engine/verifier/recorder escape hatch。"""
         context = RuntimeContext()
 
         self.assertFalse(hasattr(context, "engine"))
@@ -104,6 +111,7 @@ class UnifiedRuntimePhase1Test(unittest.TestCase):
         self.assertFalse(hasattr(context, "timing_recorder"))
 
     def test_runtime_engine_has_no_method_specific_branches(self) -> None:
+        """RuntimeEngine 源码不应出现旧方法名分支。"""
         root = Path(__file__).resolve().parents[1]
         source = (root / "src/specplatform/runtime/engine.py").read_text(encoding="utf-8")
 
@@ -116,6 +124,7 @@ class UnifiedRuntimePhase1Test(unittest.TestCase):
             self.assertNotIn(marker, source)
 
     def test_acceptance_policy_does_not_call_verifier(self) -> None:
+        """AcceptancePolicy 不能直接调用 verifier。"""
         root = Path(__file__).resolve().parents[1]
         source = (root / "src/specplatform/methods/fake_linear.py").read_text(encoding="utf-8")
         acceptance_source = source.split("class LinearPrefixAcceptancePolicy", maxsplit=1)[1]
@@ -125,6 +134,7 @@ class UnifiedRuntimePhase1Test(unittest.TestCase):
         self.assertNotIn("verify_proposal", acceptance_source)
 
     def test_phase1_artifact_writers_create_required_outputs(self) -> None:
+        """runtime 事件应能写出 Phase 1 所需 artifact。"""
         sessions = [
             GenerationSession(request_id="req0", prompt_ids=[1, 2], max_new_tokens=1, max_len=16),
         ]
