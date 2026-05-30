@@ -1,0 +1,35 @@
+# Python / tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Secrets / local env
+.env
+.env.*
+*.token
+*.key
+.ssh/
+
+# Local model and data caches
+hf_models/
+models/
+*.safetensors
+*.bin
+*.pt
+*.pth
+
+# Large or transient experiment outputs
+experiments/
+runs/
+outputs/
+*.log
+
+# OS / editor
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/
