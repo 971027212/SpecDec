@@ -121,8 +121,8 @@ shared spans and is not a real measured span.
 
 ### model/
 
-Model runner abstraction. Real CausalLM runner interfaces and Transformers
-implementations are added in later steps.
+Model runner abstraction. `CausalLMRunner` defines the minimal real causal LM
+interface; Transformers implementations are added in later steps.
 
 ## Target Placement Rule
 

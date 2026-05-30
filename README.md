@@ -31,6 +31,7 @@ D:\specDec_archives\legacy_20260530
 ## Current Capabilities
 
 - `CandidateProposal`
+- `CausalLMRunner`
 - `VerificationResult`
 - `AcceptResult`
 - `ExecutablePlan`
