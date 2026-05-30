@@ -83,7 +83,7 @@ PYTHONPATH=src /data/chajiahao/miniconda3/envs/specedge/bin/python \
 
 ```bash
 cd /home/chajiahao/data/specDec
-PYTHONPATH=src /home/chajiahao/miniconda3/bin/python \
+PYTHONPATH=src /home/chajiahao/miniconda3/envs/edge-specdec/bin/python \
   scripts/3090_speculative_smoke.py \
   --draft-model-path /home/chajiahao/data/hf_models/Qwen3-1.7B \
   --target-url http://a100-specdec:8010 \
