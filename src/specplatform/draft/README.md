@@ -1,13 +1,13 @@
 # draft
 
-Draft modules expose fake draft runner adapters for the Phase 1 unified runtime.
+Draft modules expose draft runner adapters for the minimal speculative decoding
+runtime.
 
 Allowed:
-- fake runner adapters used by tests and prototypes.
-- deterministic encode/decode helpers for the fake runtime.
+- generate draft tokens from the current prefix and a draft budget.
+- keep draft-model execution details behind a runner interface.
 
 Forbidden:
 - method acceptance logic.
 - verifier calls.
 - batch scheduling decisions.
-- real backend integration.

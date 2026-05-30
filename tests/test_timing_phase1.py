@@ -12,7 +12,7 @@ from specplatform.timing import TimingAttributor, TimingRecorder, TimingSpan, ev
 from specplatform.timing.summary import summarize_timing_events
 
 
-class FakeClock:
+class ScriptedClock:
     """用固定 ns 序列替代真实时钟，保证 timing 测试稳定。"""
 
     def __init__(self, values: list[int]) -> None:
@@ -21,7 +21,7 @@ class FakeClock:
     def __call__(self) -> int:
         """返回下一个预置时间戳。"""
         if not self.values:
-            raise AssertionError("fake clock exhausted")
+            raise AssertionError("scripted clock exhausted")
         return self.values.pop(0)
 
 
@@ -33,7 +33,7 @@ class TimingPhase1Test(unittest.TestCase):
         span = TimingSpan(
             span_id="span_001",
             phase="verify.batch_total",
-            method="fake_linear",
+            method="linear_speculative",
             plan_id="plan0",
             start_ns=1_000,
             end_ns=101_000,
@@ -46,7 +46,7 @@ class TimingPhase1Test(unittest.TestCase):
         unfinished = TimingSpan(
             span_id="span_001",
             phase="verify.batch_total",
-            method="fake_linear",
+            method="linear_speculative",
             plan_id="plan0",
             start_ns=1_000,
         )
@@ -56,7 +56,7 @@ class TimingPhase1Test(unittest.TestCase):
         backwards = TimingSpan(
             span_id="span_002",
             phase="verify.batch_total",
-            method="fake_linear",
+            method="linear_speculative",
             plan_id="plan0",
             start_ns=2_000,
             end_ns=1_000,
@@ -66,9 +66,9 @@ class TimingPhase1Test(unittest.TestCase):
 
     def test_recorder_span_generates_ids_and_bounds(self) -> None:
         """TimingRecorder.span 应生成 id 并自动记录 end_ns。"""
-        recorder = TimingRecorder(clock=FakeClock([10, 110]))
+        recorder = TimingRecorder(clock=ScriptedClock([10, 110]))
 
-        with recorder.span(phase="scheduler.plan", method="fake_linear", plan_id="plan0") as span:
+        with recorder.span(phase="scheduler.plan", method="linear_speculative", plan_id="plan0") as span:
             self.assertEqual(span.span_id, "span_000001")
             self.assertEqual(span.start_ns, 10)
 
@@ -86,11 +86,11 @@ class TimingPhase1Test(unittest.TestCase):
 
     def test_event_from_span_creates_system_event(self) -> None:
         """真实 span 转出的事件默认是 system event。"""
-        recorder = TimingRecorder(clock=FakeClock([]))
+        recorder = TimingRecorder(clock=ScriptedClock([]))
         span = TimingSpan(
             span_id="span_001",
             phase="verify.batch_total",
-            method="fake_linear",
+            method="linear_speculative",
             plan_id="plan0",
             start_ns=0,
             end_ns=100_000_000,
@@ -117,11 +117,11 @@ class TimingPhase1Test(unittest.TestCase):
 
     def test_batch_attribution_links_to_parent_span(self) -> None:
         """batch verifier 耗时应平均归因到每个 request。"""
-        recorder = TimingRecorder(clock=FakeClock([]))
+        recorder = TimingRecorder(clock=ScriptedClock([]))
         span = TimingSpan(
             span_id="span_batch",
             phase="verify.batch_total",
-            method="fake_linear",
+            method="linear_speculative",
             plan_id="plan0",
             start_ns=0,
             end_ns=100_000_000,
@@ -161,11 +161,11 @@ class TimingPhase1Test(unittest.TestCase):
 
     def test_summary_views_do_not_double_count_shared_batch(self) -> None:
         """summary 视图区分真实耗时和 request 归因，避免双算。"""
-        recorder = TimingRecorder(clock=FakeClock([]))
+        recorder = TimingRecorder(clock=ScriptedClock([]))
         span = TimingSpan(
             span_id="span_batch",
             phase="verify.batch_total",
-            method="fake_linear",
+            method="linear_speculative",
             plan_id="plan0",
             start_ns=0,
             end_ns=100_000_000,
@@ -216,11 +216,11 @@ class TimingPhase1Test(unittest.TestCase):
 
     def test_artifacts_include_timing_columns(self) -> None:
         """CSV artifact 应包含 timing/attribution 所需列。"""
-        recorder = TimingRecorder(clock=FakeClock([]))
+        recorder = TimingRecorder(clock=ScriptedClock([]))
         span = TimingSpan(
             span_id="span_batch",
             phase="verify.batch_total",
-            method="fake_linear",
+            method="linear_speculative",
             plan_id="plan0",
             start_ns=0,
             end_ns=100_000_000,

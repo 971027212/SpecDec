@@ -1,8 +1,9 @@
-# SpecPlatform Unified Runtime Skeleton
+# SpecPlatform Minimal Speculative Decoding Skeleton
 
-This directory is the active Phase 1 skeleton for the unified speculative
-decoding runtime. It keeps only the minimal runtime loop, fake runners, timing,
-metrics, and tests needed to evolve the new platform.
+This directory is the active skeleton for rebuilding a minimal real
+speculative decoding loop. The active tree keeps only shared data models,
+runtime orchestration boundaries, schedulers, timing, metrics, and tests needed
+to add the real draft/target flow one module at a time.
 
 ```text
 src/specplatform/
@@ -40,11 +41,22 @@ D:\specDec_archives\legacy_20260530
 - `TimingSpan`
 - `TimingRecorder`
 - `TimingAttributor`
-- `FakeDraftRunner`
-- `FakeProposalVerifier`
-- `FakeLinearCandidateStrategy`
-- `LinearPrefixAcceptancePolicy`
 - Phase 1 metrics artifact writers
+
+## Target Minimal Flow
+
+```text
+3090 draft model (Qwen3-1.7B)
+  -> linear draft tokens
+  -> HTTP request to A100 target verifier (Qwen3-14B)
+  -> token-by-token verification
+  -> prefix acceptance policy
+  -> GenerationSession.append_tokens(...)
+```
+
+The fake runners and baseline loop have been removed from active code. Real
+model, draft, verifier, acceptance, HTTP service, and HTTP client components are
+added in later small steps.
 
 ## Target Placement
 
@@ -61,8 +73,8 @@ target_host
 target_device
 ```
 
-The unified runtime still sees only a `VerifierBackend`; real HTTP, Torch, or
-A100/3090 service implementations are not active skeleton code yet.
+The unified runtime still sees only a `VerifierBackend`; HTTP, Torch, and
+A100/3090 service implementations are added behind that boundary.
 
 ## Verify
 
@@ -70,7 +82,7 @@ PowerShell:
 
 ```powershell
 $env:PYTHONPATH = "src"
-python -m unittest tests.test_timing_phase1 tests.test_unified_runtime_phase1 tests.test_metrics_schema -v
+python -m unittest tests.test_timing_phase1 tests.test_metrics_schema tests.test_cleanup_step0 -v
 ```
 
 See `PROJECT_STRUCTURE.md` for the active tree and package boundaries.

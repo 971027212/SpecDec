@@ -40,7 +40,7 @@ class ModelRunner(ABC):
     max_len: int
 
     def prefill(self, input_ids: list[int]) -> None:
-        """可选 prefill 钩子；fake runner 当前不需要缓存初始化。"""
+        """可选 prefill 钩子；真实 runner 可在这里初始化 KV cache。"""
         return None
 
     @abstractmethod
@@ -53,5 +53,5 @@ class ModelRunner(ABC):
         return None
 
     def reset(self, request_id: str | None = None) -> None:
-        """可选状态清理钩子；fake runner 当前无内部状态。"""
+        """可选状态清理钩子；真实 runner 可按 request 清理内部状态。"""
         return None

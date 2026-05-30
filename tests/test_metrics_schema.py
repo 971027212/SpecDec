@@ -13,7 +13,7 @@ class MetricsSchemaTest(unittest.TestCase):
         event = PhaseEvent(
             run_id="r",
             request_id="q",
-            method="fake_linear",
+            method="linear_speculative",
             phase="verify_total",
             duration_ms=1.2,
         )
@@ -57,7 +57,7 @@ class MetricsSchemaTest(unittest.TestCase):
         context = RuntimeContext(
             backend_info={
                 "target_placement": "3090",
-                "target_backend": "fake_proposal",
+                "target_backend": "http_linear",
                 "target_host": "server-rtx3090-8c",
                 "target_device": "cuda:0",
             }
@@ -65,7 +65,7 @@ class MetricsSchemaTest(unittest.TestCase):
 
         placement = context.target_placement
         self.assertEqual(placement.placement, "3090")
-        self.assertEqual(placement.backend, "fake_proposal")
+        self.assertEqual(placement.backend, "http_linear")
         self.assertEqual(placement.host, "server-rtx3090-8c")
         self.assertEqual(placement.device, "cuda:0")
 

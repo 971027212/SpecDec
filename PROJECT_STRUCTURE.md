@@ -1,6 +1,6 @@
 # SpecPlatform Project Structure
 
-Current directory: clean Phase 1 unified runtime skeleton.
+Current directory: clean minimal speculative decoding skeleton.
 
 Local active path:
 
@@ -40,9 +40,9 @@ D:\specDec
       verification/
       config.py
   tests/
-    test_unified_runtime_phase1.py
     test_timing_phase1.py
     test_metrics_schema.py
+    test_cleanup_step0.py
   README.md
   PROJECT_STRUCTURE.md
 ```
@@ -101,14 +101,14 @@ Request-to-worker, draft budget, and verify-batch planning.
 
 ### draft/
 
-Fake draft runner for Phase 1. Draft code does not accept/reject tokens, call
-verifiers, or decide batches.
+Draft runner boundary. Draft code generates draft tokens only; it does not
+accept/reject tokens, call verifiers, or decide batches. The real greedy draft
+runner is added after the cleanup step.
 
 ### verification/
 
-Unified verifier API. The active skeleton keeps only fake proposal verification.
-Real HTTP, Torch, A100, or 3090 target-service integrations belong in later
-backend implementations behind `VerifierBackend`.
+Unified verifier API. HTTP, Torch, A100, or 3090 target-service integrations
+belong behind `VerifierBackend`.
 
 ### metrics/
 
@@ -121,7 +121,8 @@ shared spans and is not a real measured span.
 
 ### model/
 
-Model runner abstraction and fake deterministic model.
+Model runner abstraction. Real CausalLM runner interfaces and Transformers
+implementations are added in later steps.
 
 ## Target Placement Rule
 
@@ -144,19 +145,19 @@ target_device
 tests/test_unified_runtime_phase1.py
 tests/test_timing_phase1.py
 tests/test_metrics_schema.py
+tests/test_cleanup_step0.py
 ```
 
 Coverage includes:
 
-- fake linear method runs through the unified runtime.
 - shared batch verify is recorded once at system level.
 - request-level attribution defaults to average split.
 - `RuntimeContext` does not expose execution escape hatches.
 - `runtime/engine.py` has no method-name-specific branches.
-- fake acceptance policy does not call verifier.
 - Phase 1 artifact writers create required files.
 - timing spans, request attribution, and summaries do not double-count time.
 - `PhaseEvent`, `CandidateTree`, and target placement schema basics.
+- active fake/baseline modules have been removed.
 
 ## Verify
 
@@ -164,5 +165,5 @@ PowerShell:
 
 ```powershell
 $env:PYTHONPATH = "src"
-python -m unittest tests.test_timing_phase1 tests.test_unified_runtime_phase1 tests.test_metrics_schema -v
+python -m unittest tests.test_timing_phase1 tests.test_metrics_schema tests.test_cleanup_step0 -v
 ```
