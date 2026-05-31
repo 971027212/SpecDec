@@ -19,6 +19,7 @@ class LinearVerifyRequest:
     prefix_ids: list[int]
     draft_tokens: list[int]
     eos_token_ids: list[int] = field(default_factory=list)
+    allow_bonus: bool = True
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -29,6 +30,7 @@ class LinearVerifyRequest:
             "prefix_ids": list(self.prefix_ids),
             "draft_tokens": list(self.draft_tokens),
             "eos_token_ids": list(self.eos_token_ids),
+            "allow_bonus": bool(self.allow_bonus),
             "metadata": dict(self.metadata),
         }
 
@@ -41,6 +43,7 @@ class LinearVerifyRequest:
             prefix_ids=[int(token_id) for token_id in payload["prefix_ids"]],
             draft_tokens=[int(token_id) for token_id in payload["draft_tokens"]],
             eos_token_ids=[int(token_id) for token_id in payload.get("eos_token_ids", [])],
+            allow_bonus=bool(payload.get("allow_bonus", True)),
             metadata=dict(payload.get("metadata", {})),
         )
 
@@ -49,6 +52,8 @@ class LinearVerifyRequest:
 class LinearVerifyResponse:
     """POST /verify_linear 的响应体。"""
 
+    request_id: str
+    proposal_id: str
     accepted_prefix_len: int
     verified_tokens: list[int]
     bonus_token: int | None = None
@@ -57,6 +62,8 @@ class LinearVerifyResponse:
     def to_dict(self) -> dict[str, Any]:
         """转换成可 JSON 序列化的字典。"""
         return {
+            "request_id": self.request_id,
+            "proposal_id": self.proposal_id,
             "accepted_prefix_len": int(self.accepted_prefix_len),
             "verified_tokens": list(self.verified_tokens),
             "bonus_token": self.bonus_token,
@@ -68,6 +75,8 @@ class LinearVerifyResponse:
         """从 HTTP JSON response 构造响应对象。"""
         bonus_token = payload.get("bonus_token")
         return cls(
+            request_id=str(payload["request_id"]),
+            proposal_id=str(payload["proposal_id"]),
             accepted_prefix_len=int(payload["accepted_prefix_len"]),
             verified_tokens=[int(token_id) for token_id in payload.get("verified_tokens", [])],
             bonus_token=None if bonus_token is None else int(bonus_token),

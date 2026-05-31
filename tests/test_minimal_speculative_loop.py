@@ -14,6 +14,7 @@ from specplatform.model import CausalLMRunner, ModelForwardInput, ModelForwardOu
 from specplatform.runtime import GenerationSession, RuntimeEngine
 from specplatform.schedulers import RoundRobinRequestScheduler
 from specplatform.verification import HttpLinearVerifierClient, LinearVerifier
+from specplatform.verification.base import VerifierBackend
 from specplatform.verification.schema import LinearVerifyResponse
 
 
@@ -68,6 +69,26 @@ class RecordingLinearVerifier(LinearVerifier):
         return super().verify_proposal(proposal, context)
 
 
+class DroppingVerifier(VerifierBackend):
+    """故意漏掉 verifier result 的测试后端，用来验证 runtime 会 fail fast。"""
+
+    backend_name = "dropping"
+
+    def verify_proposal(
+        self,
+        proposal: CandidateProposal,
+        context: RuntimeContext | None = None,
+    ) -> VerificationResult:
+        raise AssertionError("DroppingVerifier should be exercised through verify_batch.")
+
+    def verify_batch(
+        self,
+        proposals: list[CandidateProposal],
+        context: RuntimeContext | None = None,
+    ) -> list[VerificationResult]:
+        return []
+
+
 class MinimalSpeculativeLoopTest(unittest.TestCase):
     """覆盖从 draft 到 append 的最小闭环。"""
 
@@ -94,7 +115,30 @@ class MinimalSpeculativeLoopTest(unittest.TestCase):
         self.assertEqual(proposal.tokens, [2, 3])
         self.assertEqual(proposal.draft_length, 2)
         self.assertEqual(proposal.metadata["prefix_ids"], [1])
+        self.assertTrue(proposal.metadata["allow_bonus"])
         self.assertEqual(session.generated_ids, [])
+
+    def test_linear_candidate_strategy_disables_bonus_when_budget_fills_remaining_tokens(self) -> None:
+        """draft 已经填满剩余空间时，proposal 应告诉 verifier 不要额外生成 bonus。"""
+        draft_model = ScriptedCausalLMRunner({(1,): 2, (1, 2): 3})
+        draft_runner = GreedyDraftRunner(model=draft_model, runner_id="draft-worker-0")
+        session = GenerationSession(
+            request_id="request-1",
+            prompt_ids=[1],
+            max_new_tokens=2,
+            max_len=8,
+        )
+        strategy = LinearCandidateStrategy()
+
+        proposal = strategy.propose(
+            session,
+            draft_runner,
+            DraftBudget(max_tokens=4),
+            RuntimeContext(),
+        )
+
+        self.assertEqual(proposal.tokens, [2, 3])
+        self.assertFalse(proposal.metadata["allow_bonus"])
 
     def test_linear_verifier_returns_match_prefix_and_bonus(self) -> None:
         """verifier 逐 token 比较 draft 和 target，只返回验证事实。"""
@@ -116,6 +160,27 @@ class MinimalSpeculativeLoopTest(unittest.TestCase):
         self.assertEqual(result.verified_tokens, [2, 4])
         self.assertEqual(result.bonus_token, 4)
         self.assertEqual(proposal.tokens, [2, 3])
+
+    def test_linear_verifier_skips_bonus_when_not_allowed(self) -> None:
+        """allow_bonus=False 时，全匹配后 verifier 不应再多跑一次 target forward。"""
+        target_model = ScriptedCausalLMRunner({(1,): 2, (1, 2): 3})
+        verifier = LinearVerifier(model=target_model)
+        proposal = CandidateProposal(
+            proposal_id="proposal-1",
+            request_id="request-1",
+            worker_id="draft-worker-0",
+            shape="linear",
+            tokens=[2, 3],
+            draft_length=2,
+            metadata={"prefix_ids": [1], "allow_bonus": False},
+        )
+
+        result = verifier.verify_proposal(proposal, RuntimeContext())
+
+        self.assertEqual(result.accepted_prefix_len, 2)
+        self.assertEqual(result.verified_tokens, [2, 3])
+        self.assertIsNone(result.bonus_token)
+        self.assertEqual(target_model.seen_prefixes, [[1], [1, 2]])
 
     def test_greedy_prefix_acceptance_consumes_verification_result_only(self) -> None:
         """acceptance 根据 verifier result 切分 accepted/rejected/bonus。"""
@@ -206,6 +271,29 @@ class MinimalSpeculativeLoopTest(unittest.TestCase):
         self.assertEqual(result.request_results[0].output_token_ids, [2, 3, 6, 9])
         self.assertEqual(result.request_results[0].stop_reason, "eos")
 
+    def test_runtime_rejects_missing_verification_result(self) -> None:
+        """verifier 少返回结果时，runtime 应立即报错而不是让 request 反复进下一轮。"""
+        draft_model = ScriptedCausalLMRunner({(1,): 2})
+        session = GenerationSession(
+            request_id="request-1",
+            prompt_ids=[1],
+            max_new_tokens=2,
+            max_len=8,
+        )
+        engine = RuntimeEngine(
+            candidate_strategy=LinearCandidateStrategy(),
+            acceptance_policy=GreedyPrefixAcceptancePolicy(),
+            scheduler=RoundRobinRequestScheduler(default_budget=DraftBudget(max_tokens=1)),
+            verifier=DroppingVerifier(),
+        )
+
+        with self.assertRaisesRegex(ValueError, "missing"):
+            engine.run(
+                run_id="run-1",
+                sessions=[session],
+                draft_runners={"draft-worker-0": GreedyDraftRunner(model=draft_model, runner_id="draft-worker-0")},
+            )
+
     def test_runtime_has_no_method_name_branch(self) -> None:
         """runtime 可以记录 method label，但不能按 method 名称写 if/elif 分支。"""
         source = inspect.getsource(RuntimeEngine.run)
@@ -229,6 +317,8 @@ class HttpLinearVerifierClientTest(unittest.TestCase):
                 captured["payload"] = json.loads(self.rfile.read(content_length).decode("utf-8"))
                 body = json.dumps(
                     LinearVerifyResponse(
+                        request_id="request-1",
+                        proposal_id="proposal-1",
                         accepted_prefix_len=1,
                         verified_tokens=[2, 4],
                         bonus_token=4,
@@ -247,8 +337,7 @@ class HttpLinearVerifierClientTest(unittest.TestCase):
         server = HTTPServer(("127.0.0.1", 0), Handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
-        self.addCleanup(server.shutdown)
-        self.addCleanup(server.server_close)
+        self.addCleanup(_shutdown_server, server, thread)
 
         client = HttpLinearVerifierClient(base_url=f"http://127.0.0.1:{server.server_port}")
         proposal = CandidateProposal(
@@ -267,9 +356,61 @@ class HttpLinearVerifierClientTest(unittest.TestCase):
         self.assertEqual(captured["payload"]["prefix_ids"], [1])
         self.assertEqual(captured["payload"]["draft_tokens"], [2, 3])
         self.assertEqual(captured["payload"]["eos_token_ids"], [9])
+        self.assertTrue(captured["payload"]["allow_bonus"])
         self.assertEqual(result.accepted_prefix_len, 1)
         self.assertEqual(result.verified_tokens, [2, 4])
         self.assertEqual(result.bonus_token, 4)
+
+    def test_http_client_rejects_response_for_wrong_proposal(self) -> None:
+        """HTTP response 没有 echo 当前 proposal_id 时，client 应拒绝继续 acceptance。"""
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self) -> None:  # noqa: N802 - http.server 固定方法名
+                _ = self.rfile.read(int(self.headers["Content-Length"]))
+                body = json.dumps(
+                    LinearVerifyResponse(
+                        request_id="request-1",
+                        proposal_id="other-proposal",
+                        accepted_prefix_len=0,
+                        verified_tokens=[],
+                        bonus_token=None,
+                    ).to_dict()
+                ).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, format: str, *args: Any) -> None:
+                """测试中关闭 http.server 默认日志。"""
+                return None
+
+        server = HTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(_shutdown_server, server, thread)
+
+        client = HttpLinearVerifierClient(base_url=f"http://127.0.0.1:{server.server_port}")
+        proposal = CandidateProposal(
+            proposal_id="proposal-1",
+            request_id="request-1",
+            worker_id="draft-worker-0",
+            shape="linear",
+            tokens=[2],
+            draft_length=1,
+            metadata={"prefix_ids": [1]},
+        )
+
+        with self.assertRaisesRegex(ValueError, "proposal_id"):
+            client.verify_proposal(proposal, RuntimeContext())
+
+
+def _shutdown_server(server: HTTPServer, thread: threading.Thread) -> None:
+    """关闭测试 HTTP server，并等待线程退出，避免测试结束时打印线程噪声。"""
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=2.0)
 
 
 if __name__ == "__main__":

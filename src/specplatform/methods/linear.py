@@ -51,6 +51,9 @@ class LinearCandidateStrategy(CandidateStrategy):
         # verifier 需要用 draft 前的 prefix 做逐 token 验证；放在 proposal metadata 中保持 core 字段稳定。
         metadata["prefix_ids"] = list(session.prefix_ids)
         metadata["remaining_tokens"] = session.remaining_tokens
+        # 如果 draft 已经填满本轮剩余生成空间，verifier 不应该额外生成 bonus token。
+        # 这样避免 target 多跑一次 forward，也避免 bonus 被 session 静默截断。
+        metadata["allow_bonus"] = len(generation.tokens) < session.remaining_tokens
         metadata["method"] = "linear"
 
         return CandidateProposal(

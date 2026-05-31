@@ -177,6 +177,10 @@ class RuntimeEngine:
                         },
                     ) as verify_span:
                         verification_results = self.verifier.verify_batch(proposals, context)
+                    verification_results_by_id = _validate_verification_results(
+                        proposals,
+                        verification_results,
+                    )
                     self._record_span_event(
                         logger,
                         recorder,
@@ -191,7 +195,8 @@ class RuntimeEngine:
                         event_id_factory=recorder.next_event_id,
                     ):
                         logger.record(event)
-                    for verification_result in verification_results:
+                    for proposal in proposals:
+                        verification_result = verification_results_by_id[proposal.proposal_id]
                         proposal = proposals_by_id[verification_result.proposal_id]
                         session = sessions_by_id[proposal.request_id]
                         with recorder.span(
@@ -337,3 +342,36 @@ def _max_end_ns(*spans: TimingSpan) -> int:
     if len(ends) != len(spans):
         raise ValueError("Cannot aggregate unfinished TimingSpan.")
     return max(int(end) for end in ends)
+
+
+def _validate_verification_results(
+    proposals: list[CandidateProposal],
+    verification_results: list[Any],
+) -> dict[str, Any]:
+    """确保 verifier 对每个 proposal 恰好返回一个对应结果。
+
+    真实 HTTP/batch verifier 可能出现部分失败、重复响应或未知 proposal_id。
+    runtime 在进入 acceptance 前 fail fast，避免某个 request 永远不 append 而反复进入下一轮。
+    """
+    expected_ids = [proposal.proposal_id for proposal in proposals]
+    expected = set(expected_ids)
+    results_by_id: dict[str, Any] = {}
+    duplicates: list[str] = []
+    unknown: list[str] = []
+    for result in verification_results:
+        proposal_id = str(result.proposal_id)
+        if proposal_id not in expected:
+            unknown.append(proposal_id)
+            continue
+        if proposal_id in results_by_id:
+            duplicates.append(proposal_id)
+            continue
+        results_by_id[proposal_id] = result
+
+    missing = [proposal_id for proposal_id in expected_ids if proposal_id not in results_by_id]
+    if missing or duplicates or unknown:
+        raise ValueError(
+            "Verifier returned invalid result set: "
+            f"missing={missing}, duplicates={duplicates}, unknown={unknown}."
+        )
+    return results_by_id

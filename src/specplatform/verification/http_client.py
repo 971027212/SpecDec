@@ -14,7 +14,7 @@ from urllib.error import HTTPError, URLError
 
 from specplatform.core import CandidateProposal, RuntimeContext, VerificationResult
 from specplatform.verification.base import VerifierBackend
-from specplatform.verification.linear import _eos_token_ids, _proposal_prefix_ids
+from specplatform.verification.linear import _eos_token_ids, _proposal_prefix_ids, _validate_response_for_request
 from specplatform.verification.schema import LinearVerifyRequest, LinearVerifyResponse
 
 
@@ -42,9 +42,11 @@ class HttpLinearVerifierClient(VerifierBackend):
             prefix_ids=_proposal_prefix_ids(proposal),
             draft_tokens=list(proposal.tokens),
             eos_token_ids=_eos_token_ids(proposal, context),
+            allow_bonus=bool(proposal.metadata.get("allow_bonus", True)),
             metadata=dict(proposal.metadata),
         )
         response = self._post_json(verify_request)
+        _validate_response_for_request(response, verify_request)
         return VerificationResult(
             request_id=proposal.request_id,
             proposal_id=proposal.proposal_id,

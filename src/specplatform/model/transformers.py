@@ -88,10 +88,15 @@ class TransformersCausalLMRunner(CausalLMRunner):
 
     def next_token_logits(self, prefix_ids: list[int]) -> list[float]:
         """取最后一个 prefix 位置的 logits，供 greedy_next_token/verifier 使用。"""
+        import torch
+
         if not prefix_ids:
             raise ValueError("TransformersCausalLMRunner.next_token_logits requires a non-empty prefix.")
-        output = self.forward(ModelForwardInput(input_ids=list(prefix_ids)))
-        return list(output.logits[-1])
+        input_ids = torch.tensor([prefix_ids], dtype=torch.long, device=self.device)
+        with torch.inference_mode():
+            output = self.model(input_ids=input_ids)
+        # 只搬运最后一个位置的 logits；verification/greedy 不需要整段序列 logits。
+        return output.logits[0, -1].detach().float().cpu().tolist()
 
 
 def _resolve_torch_dtype(torch: Any, torch_dtype: str | None) -> Any | None:
