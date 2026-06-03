@@ -46,7 +46,6 @@ class LinearCandidateStrategy(CandidateStrategy):
                 }
             },
         )
-        proposal_id = f"{self.proposal_prefix}:{session.request_id}:{session.step_idx}"
         metadata = dict(generation.metadata)
         # verifier 需要用 draft 前的 prefix 做逐 token 验证；放在 proposal metadata 中保持 core 字段稳定。
         metadata["prefix_ids"] = list(session.prefix_ids)
@@ -55,6 +54,8 @@ class LinearCandidateStrategy(CandidateStrategy):
         # 这样避免 target 多跑一次 forward，也避免 bonus 被 session 静默截断。
         metadata["allow_bonus"] = len(generation.tokens) < session.remaining_tokens
         metadata["method"] = "linear"
+        runner_id = str(metadata.get("runner_id") or "draft")
+        proposal_id = f"{self.proposal_prefix}:{session.request_id}:{session.step_idx}:{runner_id}"
 
         return CandidateProposal(
             proposal_id=proposal_id,

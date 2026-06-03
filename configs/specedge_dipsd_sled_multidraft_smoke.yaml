@@ -1,0 +1,65 @@
+run:
+  id: 3090_a100_specedge_dipsd_sled_multidraft_smoke
+  methods:
+    - target_only
+    - tree_stop_wait
+    - specedge_pipeline
+    - dip_sd
+    - sled
+  output_dir: experiments/3090_a100_specedge_dipsd_sled_multidraft_smoke/latest
+models:
+  draft: /home/chajiahao/data/hf_models/Qwen3-1.7B
+target:
+  url: http://172.16.11.62:8011
+draft:
+  device: cuda:0
+  torch_dtype: fp16
+  backend: qwen3_graph
+  worker_count: 2
+  disable_backend_fallback: false
+  # For true independent workers, replace worker_count with explicit workers:
+  # workers:
+  #   - worker_id: draft-a
+  #     model_path: /home/chajiahao/data/hf_models/Qwen3-1.7B
+  #     device: cuda:0
+  #     backend: qwen3_graph
+  #     draft_type: tree
+  #     speed_profile: {name: fast, relative_speed: 1.0}
+data:
+  prompt: 介绍一下 speculative decoding
+  sample_prompts: data/sample_prompts_mixed.jsonl
+  sample_count: 8
+  use_sample_prompts: true
+generation:
+  max_new_tokens: 4
+tree:
+  max_depth: 2
+  branch_width: 8
+  max_budget: 20
+  max_verify_batch_items: 8
+pipeline:
+  min_depth: 1
+  max_depth: 8
+  proactive_depth: 2
+dip_sd:
+  solver: enumerate
+  min_batch_count: 2
+  max_batch_count: 0
+  initial_draft_length: 7
+  max_draft_length: 8
+  alpha: 0.78
+  comm_latency_ms: 3.0
+  draft_c: 4.0305e-11
+  draft_beta: 33.8151
+  verify_c: 1.2077e-11
+  verify_beta: 95.1074
+  memory_cap_bytes: 8.0e10
+sled:
+  batch_size: 8
+  max_speculation_tokens: 2
+  confidence_threshold: 0.5
+transport:
+  mode: observe
+plots:
+  formats: png,svg
+  disabled: false

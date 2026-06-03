@@ -6,6 +6,12 @@ from __future__ import annotations
 仍应保持“只计划、不执行”的边界。
 """
 
+from specplatform.schedulers.policies import BatchAssignmentPolicy, PreferredBatchAssignmentPolicy
 from specplatform.schedulers.request_scheduler import RoundRobinRequestScheduler, SchedulerResources
 
-__all__ = ["RoundRobinRequestScheduler", "SchedulerResources"]
+__all__ = [
+    "BatchAssignmentPolicy",
+    "PreferredBatchAssignmentPolicy",
+    "RoundRobinRequestScheduler",
+    "SchedulerResources",
+]

@@ -19,7 +19,9 @@ def phase_category(phase: str) -> str:
         "accept",
         "session",
         "request",
+        "setup",
         "artifact",
+        "plot",
     }
     return prefix if prefix in known else "runtime"
 

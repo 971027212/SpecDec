@@ -39,3 +39,5 @@ class CandidateProposal:
             raise ValueError("linear proposals cannot carry a candidate tree.")
         if self.shape == "tree" and self.tree is None:
             raise ValueError("tree proposals require a candidate tree.")
+        if self.shape == "tree" and self.tree is not None:
+            self.tree.validate()

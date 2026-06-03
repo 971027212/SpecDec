@@ -1,0 +1,67 @@
+run:
+  id: target_specedge_sled_matrix_1xa100
+  methods:
+    - target_only
+    - specedge_pipeline
+    - sled_async
+  output_dir: experiments/target_specedge_sled_matrix_1xa100/latest
+models:
+  draft: /home/chajiahao/data/hf_models/Qwen3-1.7B
+target:
+  url: http://172.16.11.62:8011
+  urls:
+    - http://172.16.11.62:8011
+  require_graph: true
+  required_backend: qwen3_graph
+  required_replicas: 1
+draft:
+  device: cuda:0
+  torch_dtype: fp16
+  backend: qwen3_graph
+  worker_count: 8
+  disable_backend_fallback: true
+  warmup:
+    enabled: true
+    tokens: 1
+    tree_depth: 8
+    branch_width: 8
+    max_budget: 20
+    parallelism: 8
+data:
+  sample_prompts: data/sample_prompts_mixed.jsonl
+  sample_count: 8
+  use_sample_prompts: true
+generation:
+  max_new_tokens: 8
+tree:
+  max_depth: 8
+  branch_width: 8
+  max_budget: 20
+  max_verify_batch_items: 8
+specedge:
+  official: true
+pipeline:
+  min_depth: 1
+  max_depth: 8
+  proactive_depth: 8
+sled:
+  strict: true
+  require_graph_target: true
+  batch_size: 8
+  max_speculation_tokens: 8
+  confidence_threshold: 0.5
+  async:
+    proactive_tokens: 8
+  static_queue:
+    enabled: true
+    max_wait_ms: null
+    pad_to_max_length: true
+  timeout_ms: null
+  retry_count: 0
+  fallback_failure_threshold: 0
+  enable_fallback_release: false
+transport:
+  mode: observe
+plots:
+  formats: png,svg
+  disabled: true

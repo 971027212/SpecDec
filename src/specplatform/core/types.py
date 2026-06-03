@@ -22,6 +22,31 @@ class CandidateNode:
     draft_logprob: float | None
     draft_worker_id: str
 
+    def to_dict(self) -> dict[str, Any]:
+        """转换成 tree verify schema 可直接序列化的节点字典。"""
+        return {
+            "node_id": int(self.node_id),
+            "parent_id": None if self.parent_id is None else int(self.parent_id),
+            "token_id": int(self.token_id),
+            "depth": int(self.depth),
+            "draft_logprob": None if self.draft_logprob is None else float(self.draft_logprob),
+            "draft_worker_id": str(self.draft_worker_id),
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "CandidateNode":
+        """从 JSON 友好的节点字典恢复 CandidateNode。"""
+        parent_id = payload.get("parent_id")
+        draft_logprob = payload.get("draft_logprob")
+        return cls(
+            node_id=int(payload["node_id"]),
+            parent_id=None if parent_id is None else int(parent_id),
+            token_id=int(payload["token_id"]),
+            depth=int(payload["depth"]),
+            draft_logprob=None if draft_logprob is None else float(draft_logprob),
+            draft_worker_id=str(payload.get("draft_worker_id", "")),
+        )
+
 
 @dataclass
 class CandidateTree:
@@ -34,16 +59,55 @@ class CandidateTree:
     nodes: list[CandidateNode] = field(default_factory=list)
 
     def validate(self) -> None:
-        """校验候选树拓扑：节点唯一、父节点先出现、深度为正。"""
-        seen: set[int] = set()
+        """校验候选树拓扑：节点唯一、父节点先出现、深度连续。"""
+        if self.root_prefix_len < 1:
+            raise ValueError("CandidateTree root_prefix_len must be positive.")
+        seen: dict[int, CandidateNode] = {}
         for node in self.nodes:
             if node.node_id in seen:
                 raise ValueError(f"Duplicate candidate node id: {node.node_id}")
-            if node.parent_id is not None and node.parent_id not in seen:
-                raise ValueError(f"Parent must appear before child: {node.node_id}")
             if node.depth < 1:
                 raise ValueError(f"Candidate node depth must be positive: {node.node_id}")
-            seen.add(node.node_id)
+            if node.parent_id is None:
+                if node.depth != 1:
+                    raise ValueError(f"Root child depth must be 1: {node.node_id}")
+            else:
+                parent = seen.get(node.parent_id)
+                if parent is None:
+                    raise ValueError(f"Parent must appear before child: {node.node_id}")
+                if node.depth != parent.depth + 1:
+                    raise ValueError(f"Candidate node depth must follow parent depth: {node.node_id}")
+            seen[node.node_id] = node
+
+    def to_dict(self) -> dict[str, Any]:
+        """转换成 tree verify schema 可直接序列化的字典。"""
+        return {
+            "root_prefix_len": int(self.root_prefix_len),
+            "nodes": [node.to_dict() for node in self.nodes],
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "CandidateTree":
+        """从 JSON 友好的字典恢复 CandidateTree，并校验拓扑。"""
+        tree = cls(
+            root_prefix_len=int(payload["root_prefix_len"]),
+            nodes=[CandidateNode.from_dict(node) for node in payload.get("nodes", [])],
+        )
+        tree.validate()
+        return tree
+
+    def nodes_by_id(self) -> dict[int, CandidateNode]:
+        """返回 node_id 到节点的映射。"""
+        self.validate()
+        return {node.node_id: node for node in self.nodes}
+
+    def children_by_parent(self) -> dict[int | None, list[CandidateNode]]:
+        """按 parent_id 分组，保留节点原始顺序。"""
+        self.validate()
+        grouped: dict[int | None, list[CandidateNode]] = {}
+        for node in self.nodes:
+            grouped.setdefault(node.parent_id, []).append(node)
+        return grouped
 
 
 @dataclass
@@ -118,6 +182,8 @@ def _phase_category(phase: str) -> str:
         "accept",
         "session",
         "request",
+        "setup",
         "artifact",
+        "plot",
     }
     return prefix if prefix in known else "runtime"

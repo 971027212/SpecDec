@@ -1,0 +1,8 @@
+{"id":"heldout-001","prompt":"Explain speculative decoding to a systems engineer in two sentences."}
+{"id":"heldout-002","prompt":"请比较吞吐量和首 token 延迟在在线推理服务中的区别。"}
+{"id":"heldout-003","prompt":"Write a Python function that counts vowels in a string."}
+{"id":"heldout-004","prompt":"Describe why KV cache memory grows with sequence length."}
+{"id":"heldout-005","prompt":"如果多个边缘设备同时提交验证请求，服务器 batching 会带来什么收益？"}
+{"id":"heldout-006","prompt":"List two risks of using a weak draft model in speculative decoding."}
+{"id":"heldout-007","prompt":"Summarize how queueing delay can hurt interactive LLM serving."}
+{"id":"heldout-008","prompt":"给出一个例子说明为什么需要把调参集和测试集分开。"}

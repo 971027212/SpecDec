@@ -1,0 +1,39 @@
+run:
+  id: 3090_a100_specedge_pipeline_smoke
+  methods:
+    - target_only
+    - linear
+    - tree_stop_wait
+    - specedge_pipeline
+  output_dir: experiments/3090_a100_specedge_pipeline_smoke/latest
+models:
+  draft: /home/chajiahao/data/hf_models/Qwen3-1.7B
+target:
+  url: http://172.16.11.62:8010
+draft:
+  device: cuda:0
+  torch_dtype: fp16
+  backend: qwen3_graph
+  disable_backend_fallback: false
+data:
+  prompt: 介绍一下 speculative decoding
+  sample_prompts: data/sample_prompts_mixed.jsonl
+  sample_count: 8
+  use_sample_prompts: true
+generation:
+  max_new_tokens: 4
+linear:
+  draft_tokens: 4
+tree:
+  max_depth: 2
+  branch_width: 8
+  max_budget: 20
+pipeline:
+  min_depth: 1
+  max_depth: 8
+  proactive_depth: 2
+transport:
+  mode: observe
+plots:
+  formats: png,svg
+  disabled: false

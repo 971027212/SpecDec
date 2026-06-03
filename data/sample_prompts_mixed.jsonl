@@ -1,0 +1,8 @@
+{"id":"mixed-001","prompt":"介绍一下 speculative decoding 的核心思想。"}
+{"id":"mixed-002","prompt":"Explain why batching can improve GPU utilization."}
+{"id":"mixed-003","prompt":"写一个 Python 函数，返回列表中的最大值。"}
+{"id":"mixed-004","prompt":"Summarize the tradeoff between latency and throughput in model serving."}
+{"id":"mixed-005","prompt":"如果 draft model 很快但不够准确，推测解码会发生什么？"}
+{"id":"mixed-006","prompt":"List three practical metrics for evaluating an inference platform."}
+{"id":"mixed-007","prompt":"请用一句话解释 KV cache 为什么能加速自回归生成。"}
+{"id":"mixed-008","prompt":"Given a sorted array, describe how binary search works."}

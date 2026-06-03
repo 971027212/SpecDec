@@ -48,6 +48,9 @@ class PlanHints:
     """method/planning policy 给 scheduler 的非强制提示。"""
 
     draft_lengths: dict[str, int] = field(default_factory=dict)
+    candidate_draft_lengths: dict[str, dict[str, int]] = field(default_factory=dict)
+    worker_preferences: dict[str, str] = field(default_factory=dict)
+    candidate_worker_preferences: dict[str, list[str]] = field(default_factory=dict)
     preferred_batches: list[list[str]] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 

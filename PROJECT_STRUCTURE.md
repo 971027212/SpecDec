@@ -5,7 +5,7 @@ Current directory: clean minimal speculative decoding skeleton.
 Local active path:
 
 ```text
-D:\specDec
+/home/chajiahao/data/specDec
 ```
 
 Server active paths:
@@ -26,7 +26,7 @@ D:\specDec_archives\legacy_20260530
 ## Active Tree
 
 ```text
-D:\specDec
+/home/chajiahao/data/specDec
   src/
     specplatform/
       core/
@@ -46,9 +46,17 @@ D:\specDec
     test_greedy_draft_runner.py
     test_model_interface.py
     test_minimal_speculative_loop.py
+    test_timing_charts.py
+    test_specedge_tree_core.py
+    test_specedge_smoke_runner.py
+    test_worker_registry_scheduler.py
+    test_experiment_matrix_runner.py
   scripts/
     a100_target_service.py
+    3090_specedge_smoke.py
     3090_speculative_smoke.py
+    render_timing_charts.py
+    run_experiment_matrix.py
   README.md
   PROJECT_STRUCTURE.md
 ```
@@ -101,17 +109,28 @@ branch on method names. The current loop is:
 
 Algorithm difference layer. It owns strategies, policies, and planning hints;
 it must not contain a full request loop. Current minimal method components are
-`LinearCandidateStrategy` and `GreedyPrefixAcceptancePolicy`.
+`LinearCandidateStrategy`, `GreedyPrefixAcceptancePolicy`, SpecEdge tree
+policies, `DiPSDPlanningPolicy`, and `SLEDPlanningPolicy`.
 
 ### schedulers/
 
-Request-to-worker, draft budget, and verify-batch planning.
+Request-to-worker, draft budget, and verify-batch planning. `RequestPool`,
+`BatchAssignmentPolicy`, and `DraftLengthPolicy` are shared by SpecEdge,
+DiP-SD, and SLED. Matrix experiments can now choose either legacy shared-model
+workers or explicit registry-backed workers with homogeneous/heterogeneous
+speed profiles. SLED uses `worker_preferences` for one stable edge-device draft
+worker per request; `PlanHints.candidate_worker_preferences` remains a generic
+runtime feature but is not part of the SLED paper reproduction.
 
 ### draft/
 
 Draft runner boundary. Draft code generates draft tokens only; it does not
 accept/reject tokens, call verifiers, or decide batches. `GreedyDraftRunner`
 now runs a `CausalLMRunner` greedily and returns raw `DraftGeneration` tokens.
+`DraftWorkerRegistry` owns configurable multi-draft loading and constructs
+typed runners from per-worker `model_path/device/backend/draft_type` settings.
+Speed profile metadata includes relative speed, latency, quality, and expected
+acceptance hints for method planning.
 
 ### verification/
 
@@ -121,7 +140,10 @@ belong behind `VerifierBackend`. Current minimal implementations are
 
 ### metrics/
 
-Event recording and artifact writing.
+Event recording, artifact writing, matplotlib timing charts, and matrix-level
+comparison plots.  Matrix summaries include a long per-method table, a wide
+per-cell comparison table, aggregate method stats, best-method tables, and
+speedup heatmaps for SpecEdge/DiP-SD/SLED.
 
 ### timing/
 
@@ -158,6 +180,11 @@ tests/test_cleanup_step0.py
 tests/test_greedy_draft_runner.py
 tests/test_model_interface.py
 tests/test_minimal_speculative_loop.py
+tests/test_timing_charts.py
+tests/test_specedge_tree_core.py
+tests/test_specedge_smoke_runner.py
+tests/test_worker_registry_scheduler.py
+tests/test_experiment_matrix_runner.py
 ```
 
 Coverage includes:
@@ -168,6 +195,7 @@ Coverage includes:
 - `runtime/engine.py` has no method-name-specific branches.
 - Phase 1 artifact writers create required files.
 - timing spans, request attribution, and summaries do not double-count time.
+- timing chart audit and optional PNG/SVG rendering.
 - `PhaseEvent`, `CandidateTree`, and target placement schema basics.
 - active fake/baseline modules have been removed.
 - draft proposal is verified.

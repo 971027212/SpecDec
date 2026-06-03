@@ -45,12 +45,15 @@ def write_phase_events_csv(events: list[PhaseEvent], path: str | Path) -> None:
         "measured_duration_ms",
         "attributed_duration_ms",
         "duration_ms",
+        "metadata",
     ]
     with output_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         for event in events:
-            writer.writerow({name: getattr(event, name) for name in fieldnames})
+            row = {name: getattr(event, name) for name in fieldnames if name != "metadata"}
+            row["metadata"] = json.dumps(event.metadata, ensure_ascii=False, sort_keys=True)
+            writer.writerow(row)
 
 
 def write_phase_summary_csv(events: list[PhaseEvent], path: str | Path) -> None:
@@ -91,3 +94,48 @@ def write_request_results_json(results: list[Any], path: str | Path) -> None:
         for result in results
     ]
     output_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def write_tree_snapshots_jsonl(events: list[PhaseEvent], path: str | Path) -> int:
+    """从 PhaseEvent metadata 中提取每轮紧凑 tree snapshot。"""
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    accept_by_proposal: dict[str, dict[str, Any]] = {}
+    for event in events:
+        if event.phase != "accept.apply" or not event.proposal_id:
+            continue
+        metadata = dict(event.metadata or {})
+        if "accepted_node_ids" in metadata or "rejected_node_ids" in metadata:
+            accept_by_proposal[event.proposal_id] = {
+                "accepted_node_ids": list(metadata.get("accepted_node_ids", [])),
+                "rejected_node_ids": list(metadata.get("rejected_node_ids", [])),
+                "accepted_count": metadata.get("accepted_count"),
+                "rejected_count": metadata.get("rejected_count"),
+                "has_bonus": metadata.get("has_bonus"),
+            }
+
+    rows: list[dict[str, Any]] = []
+    for event in events:
+        metadata = dict(event.metadata or {})
+        tree_snapshot = metadata.get("tree_snapshot")
+        if not isinstance(tree_snapshot, dict):
+            continue
+        proposal_id = str(event.proposal_id or "")
+        rows.append(
+            {
+                "run_id": event.run_id,
+                "method": event.method,
+                "round": event.round,
+                "request_id": event.request_id,
+                "worker_id": event.worker_id,
+                "batch_id": event.batch_id,
+                "proposal_id": proposal_id,
+                "tree": tree_snapshot,
+                **accept_by_proposal.get(proposal_id, {}),
+            }
+        )
+
+    with output_path.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+    return len(rows)

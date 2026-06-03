@@ -1,0 +1,154 @@
+run:
+  id: three_method_locked_compare
+  methods:
+  - target_only
+  - specedge_pipeline
+  - sled_async
+  - dip_sd
+  output_dir: experiments/three_method_locked_compare/latest
+models:
+  draft: /home/chajiahao/data/hf_models/Qwen3-1.7B
+target:
+  url: http://172.16.11.62:8011
+  require_graph: true
+  required_backend: qwen3_graph
+  required_replicas: 1
+draft:
+  device: cuda:0
+  torch_dtype: fp16
+  backend: qwen3_graph
+  worker_count: 8
+  disable_backend_fallback: true
+  max_graph_len: 2048
+  max_graph_tokens: 20
+  max_graph_batch_size: 1
+  auto_graph_batch_size: true
+  warmup:
+    enabled: true
+    tokens: 1
+    tree_depth: 8
+    branch_width: 8
+    max_budget: 20
+    parallelism: 8
+  workers:
+  - worker_id: draft-qwen3-0p6b-gpu0
+    model_path: /home/chajiahao/data/hf_models/Qwen3-0.6B
+    device: cuda:0
+    backend: qwen3_graph
+    torch_dtype: fp16
+    draft_type: both
+    speed_profile: &id001
+      name: model-size-Qwen3-0.6B
+      relative_speed: 2.833333
+      latency_ms: 1.411765
+      quality: 0.808235
+      metadata:
+        model_size_billions: 0.6
+  - worker_id: draft-qwen3-1p7b-gpu1
+    model_path: /home/chajiahao/data/hf_models/Qwen3-1.7B
+    device: cuda:1
+    backend: qwen3_graph
+    torch_dtype: fp16
+    draft_type: both
+    speed_profile: &id002
+      name: model-size-Qwen3-1.7B
+      relative_speed: 1.0
+      latency_ms: 4.0
+      quality: 0.97
+      metadata:
+        model_size_billions: 1.7
+  - worker_id: draft-qwen3-0p6b-gpu2
+    model_path: /home/chajiahao/data/hf_models/Qwen3-0.6B
+    device: cuda:2
+    backend: qwen3_graph
+    torch_dtype: fp16
+    draft_type: both
+    speed_profile: *id001
+  - worker_id: draft-qwen3-1p7b-gpu3
+    model_path: /home/chajiahao/data/hf_models/Qwen3-1.7B
+    device: cuda:3
+    backend: qwen3_graph
+    torch_dtype: fp16
+    draft_type: both
+    speed_profile: *id002
+  - worker_id: draft-qwen3-0p6b-gpu4
+    model_path: /home/chajiahao/data/hf_models/Qwen3-0.6B
+    device: cuda:4
+    backend: qwen3_graph
+    torch_dtype: fp16
+    draft_type: both
+    speed_profile: *id001
+  - worker_id: draft-qwen3-1p7b-gpu5
+    model_path: /home/chajiahao/data/hf_models/Qwen3-1.7B
+    device: cuda:5
+    backend: qwen3_graph
+    torch_dtype: fp16
+    draft_type: both
+    speed_profile: *id002
+  - worker_id: draft-qwen3-0p6b-gpu6
+    model_path: /home/chajiahao/data/hf_models/Qwen3-0.6B
+    device: cuda:6
+    backend: qwen3_graph
+    torch_dtype: fp16
+    draft_type: both
+    speed_profile: *id001
+  - worker_id: draft-qwen3-1p7b-gpu7
+    model_path: /home/chajiahao/data/hf_models/Qwen3-1.7B
+    device: cuda:7
+    backend: qwen3_graph
+    torch_dtype: fp16
+    draft_type: both
+    speed_profile: *id002
+data:
+  prompt: 介绍一下 speculative decoding
+  sample_prompts: data/sample_prompts_heldout.jsonl
+  sample_count: 8
+  use_sample_prompts: true
+  split:
+    tuning_sample_prompts: data/sample_prompts_mixed.jsonl
+    heldout_sample_prompts: data/sample_prompts_heldout.jsonl
+    heldout_request_count: 8
+generation:
+  max_new_tokens: 8
+tree:
+  max_depth: 4
+  branch_width: 8
+  max_budget: 20
+  max_verify_batch_items: 8
+pipeline:
+  min_depth: 1
+  max_depth: 8
+  proactive_depth: 8
+specedge:
+  official: true
+dip_sd:
+  solver: paper_milp_or_dinkelbach
+  min_batch_count: 2
+  max_batch_count: 0
+  initial_draft_length: 4
+  max_draft_length: 4
+  alpha: 0.78
+  comm_latency_ms: 3.0
+  draft_c: 4.0305e-11
+  draft_beta: 33.8151
+  verify_c: 1.2077e-11
+  verify_beta: 95.1074
+  memory_cap_bytes: 8.0e10
+  plan_cache_enabled: true
+  steady_state_enabled: true
+  calibration_enabled: false
+sled:
+  strict: true
+  batch_size: 8
+  max_speculation_tokens: 4
+  confidence_threshold: 0.6
+  async:
+    proactive_tokens: 8
+  static_queue:
+    enabled: true
+    pad_to_max_length: true
+transport:
+  mode: observe
+plots:
+  formats: png,svg
+  disabled: false

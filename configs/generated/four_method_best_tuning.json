@@ -1,0 +1,41 @@
+{
+  "dip_sd": {
+    "candidate_id": "dip_sd_000_bc2-auto_calnone_mdl4_solpaper_milp_or_dinkelbach",
+    "config_path": "experiments/three_method_tuning_verifyfix/latest/tuning_configs/dip_sd/dip_sd_000_bc2-auto_calnone_mdl4_solpaper_milp_or_dinkelbach.yaml",
+    "effective_total_ms": 40615.566304,
+    "matches_target_only": true,
+    "method": "dip_sd",
+    "params_json": "{\"batch_count\": [2, null], \"calibration_profile\": null, \"max_draft_length\": 4, \"solver\": \"paper_milp_or_dinkelbach\"}",
+    "run_output": "experiments/three_method_tuning_verifyfix/latest/tuning_runs/dip_sd/dip_sd_000_bc2-auto_calnone_mdl4_solpaper_milp_or_dinkelbach",
+    "speedup_vs_target_only": 0.115476,
+    "status": "completed",
+    "target_only_effective_total_ms": 4690.114563,
+    "wstgr_tokens_per_s": 1.575751
+  },
+  "sled_async": {
+    "candidate_id": "sled_async_011_bs8_ct0p6_mst4_pt8_qmwnone",
+    "config_path": "experiments/three_method_tuning_verifyfix/latest/tuning_configs/sled_async/sled_async_011_bs8_ct0p6_mst4_pt8_qmwnone.yaml",
+    "effective_total_ms": 4753.705349,
+    "matches_target_only": true,
+    "method": "sled_async",
+    "params_json": "{\"batch_size\": 8, \"confidence_threshold\": 0.6, \"max_speculation_tokens\": 4, \"proactive_tokens\": 8, \"queue_max_wait_ms\": null}",
+    "run_output": "experiments/three_method_tuning_verifyfix/latest/tuning_runs/sled_async/sled_async_011_bs8_ct0p6_mst4_pt8_qmwnone",
+    "speedup_vs_target_only": 0.805696,
+    "status": "completed",
+    "target_only_effective_total_ms": 3830.039895,
+    "wstgr_tokens_per_s": 13.463182
+  },
+  "specedge_pipeline": {
+    "candidate_id": "specedge_pipeline_003_bw8_d4_mb20_offon_pd8",
+    "config_path": "experiments/three_method_tuning_verifyfix/latest/tuning_configs/specedge_pipeline/specedge_pipeline_003_bw8_d4_mb20_offon_pd8.yaml",
+    "effective_total_ms": 4442.814277,
+    "matches_target_only": true,
+    "method": "specedge_pipeline",
+    "params_json": "{\"branch_width\": 8, \"depth\": 4, \"max_budget\": 20, \"official\": true, \"proactive_depth\": 8}",
+    "run_output": "experiments/three_method_tuning_verifyfix/latest/tuning_runs/specedge_pipeline/specedge_pipeline_003_bw8_d4_mb20_offon_pd8",
+    "speedup_vs_target_only": 0.856104,
+    "status": "completed",
+    "target_only_effective_total_ms": 3803.51284,
+    "wstgr_tokens_per_s": 14.405284
+  }
+}

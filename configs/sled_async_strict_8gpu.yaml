@@ -1,0 +1,126 @@
+run:
+  id: 3090_a100_sled_async_strict_8gpu
+  methods:
+    - target_only
+    - sled_async
+  output_dir: experiments/3090_a100_sled_async_strict_8gpu/latest
+models:
+  draft: /home/chajiahao/data/hf_models/Qwen3-1.7B
+target:
+  url: http://172.16.11.62:8011
+  urls:
+    - http://172.16.11.62:8011
+  require_graph: true
+  required_backend: qwen3_graph
+  # Paper-default strict SLED requires two A100 target replicas.
+  # Single-card test runs should use a dedicated override config.
+  required_replicas: 2
+draft:
+  device: cuda:0
+  torch_dtype: fp16
+  backend: hf_cached
+  worker_count: 8
+  disable_backend_fallback: true
+  warmup:
+    enabled: true
+    tokens: 1
+    parallelism: 8
+  workers:
+    - worker_id: edge-qwen3-0p6b-gpu0
+      model_path: /home/chajiahao/data/hf_models/Qwen3-0.6B
+      device: cuda:0
+      backend: hf_cached
+      torch_dtype: fp16
+      draft_type: greedy
+      speed_profile: &qwen06
+        name: model-size-Qwen3-0.6B
+        relative_speed: 2.833333
+        latency_ms: 1.411765
+        quality: 0.808235
+        metadata:
+          model_size_billions: 0.6
+    - worker_id: edge-qwen3-1p7b-gpu1
+      model_path: /home/chajiahao/data/hf_models/Qwen3-1.7B
+      device: cuda:1
+      backend: hf_cached
+      torch_dtype: fp16
+      draft_type: greedy
+      speed_profile: &qwen17
+        name: model-size-Qwen3-1.7B
+        relative_speed: 1.0
+        latency_ms: 4.0
+        quality: 0.97
+        metadata:
+          model_size_billions: 1.7
+    - worker_id: edge-qwen3-0p6b-gpu2
+      model_path: /home/chajiahao/data/hf_models/Qwen3-0.6B
+      device: cuda:2
+      backend: hf_cached
+      torch_dtype: fp16
+      draft_type: greedy
+      speed_profile: *qwen06
+    - worker_id: edge-qwen3-1p7b-gpu3
+      model_path: /home/chajiahao/data/hf_models/Qwen3-1.7B
+      device: cuda:3
+      backend: hf_cached
+      torch_dtype: fp16
+      draft_type: greedy
+      speed_profile: *qwen17
+    - worker_id: edge-qwen3-0p6b-gpu4
+      model_path: /home/chajiahao/data/hf_models/Qwen3-0.6B
+      device: cuda:4
+      backend: hf_cached
+      torch_dtype: fp16
+      draft_type: greedy
+      speed_profile: *qwen06
+    - worker_id: edge-qwen3-1p7b-gpu5
+      model_path: /home/chajiahao/data/hf_models/Qwen3-1.7B
+      device: cuda:5
+      backend: hf_cached
+      torch_dtype: fp16
+      draft_type: greedy
+      speed_profile: *qwen17
+    - worker_id: edge-qwen3-0p6b-gpu6
+      model_path: /home/chajiahao/data/hf_models/Qwen3-0.6B
+      device: cuda:6
+      backend: hf_cached
+      torch_dtype: fp16
+      draft_type: greedy
+      speed_profile: *qwen06
+    - worker_id: edge-qwen3-1p7b-gpu7
+      model_path: /home/chajiahao/data/hf_models/Qwen3-1.7B
+      device: cuda:7
+      backend: hf_cached
+      torch_dtype: fp16
+      draft_type: greedy
+      speed_profile: *qwen17
+data:
+  sample_prompts: data/sample_prompts_mixed.jsonl
+  sample_count: 8
+  use_sample_prompts: true
+generation:
+  max_new_tokens: 8
+pipeline:
+  min_depth: 1
+  max_depth: 8
+sled:
+  strict: true
+  require_graph_target: true
+  batch_size: 8
+  max_speculation_tokens: 8
+  confidence_threshold: 0.5
+  async:
+    proactive_tokens: 8
+  static_queue:
+    enabled: true
+    max_wait_ms: null
+    pad_to_max_length: true
+  timeout_ms: null
+  retry_count: 0
+  fallback_failure_threshold: 0
+  enable_fallback_release: false
+transport:
+  mode: observe
+plots:
+  formats: png,svg
+  disabled: false

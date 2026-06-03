@@ -13,6 +13,7 @@ from typing import Any
 from specplatform.core import CandidateProposal, PlanHints, RuntimeContext
 from specplatform.methods.base import AcceptancePolicy, CandidateStrategy, PlanningPolicy
 from specplatform.metrics import EventLogger
+from specplatform.runtime.draft_execution import execute_draft_jobs
 from specplatform.runtime.session import GenerationSession
 from specplatform.schedulers import Scheduler, SchedulerResources
 from specplatform.schedulers.batch_planner import attach_proposals_to_batches
@@ -104,10 +105,14 @@ class RuntimeEngine:
                 ) as scheduler_span:
                     plan = self.scheduler.plan(
                         active_sessions=active_sessions,
-                        resources=SchedulerResources(draft_worker_ids=list(draft_runners)),
+                        resources=SchedulerResources(
+                            draft_worker_ids=list(draft_runners),
+                            draft_worker_metadata=_draft_runner_metadata(draft_runners),
+                        ),
                         hints=hints,
                         context=context,
                     )
+                    scheduler_span.metadata.update(_plan_metadata(plan, hints))
                 self._record_span_event(
                     logger,
                     recorder,
@@ -116,12 +121,21 @@ class RuntimeEngine:
                     attribution="system",
                 )
                 sessions_by_id = {session.request_id: session for session in active_sessions}
-                proposals_by_request: dict[str, CandidateProposal] = {}
-                draft_spans_by_request: dict[str, TimingSpan] = {}
-                for job in plan.draft_jobs:
-                    session = sessions_by_id[job.request_id]
-                    runner = draft_runners[job.worker_id]
-                    with recorder.span(
+                proposals_by_request: dict[str, list[CandidateProposal]] = {}
+                draft_spans_by_proposal: dict[str, TimingSpan] = {}
+                draft_results = execute_draft_jobs(
+                    jobs=list(plan.draft_jobs),
+                    sessions_by_id=sessions_by_id,
+                    draft_runners=draft_runners,
+                    candidate_strategy=self.candidate_strategy,
+                    context=context,
+                    clock=recorder.clock,
+                )
+                for draft_result in draft_results:
+                    job = draft_result.job
+                    session = draft_result.session
+                    proposal = draft_result.proposal
+                    draft_span = recorder.record_completed(
                         phase="draft.generate",
                         method=method,
                         plan_id=plan_id,
@@ -130,11 +144,17 @@ class RuntimeEngine:
                         request_id=session.request_id,
                         session_id=session.request_id,
                         worker_id=job.worker_id,
-                    ) as draft_span:
-                        proposal = self.candidate_strategy.propose(session, runner, job.budget, context)
-                        draft_span.proposal_id = proposal.proposal_id
-                    proposals_by_request[job.request_id] = proposal
-                    draft_spans_by_request[job.request_id] = draft_span
+                        proposal_id=proposal.proposal_id,
+                        metadata={
+                            "state": "READY_DRAFT",
+                            "draft_parallelism": draft_result.parallelism,
+                            "parallel_draft": draft_result.parallelism > 1,
+                        },
+                        start_ns=draft_result.start_ns,
+                        end_ns=draft_result.end_ns,
+                    )
+                    proposals_by_request.setdefault(job.request_id, []).append(proposal)
+                    draft_spans_by_proposal[proposal.proposal_id] = draft_span
                     request_results[job.request_id].proposals.append(proposal.proposal_id)
                     self._record_span_event(
                         logger,
@@ -145,14 +165,34 @@ class RuntimeEngine:
                         tokens_out=len(proposal.tokens),
                         metadata=dict(proposal.metadata),
                     )
+                    self._record_detail_event_specs(
+                        logger,
+                        recorder,
+                        proposal.metadata.get("draft_token_forward_events", []),
+                        default_phase="draft.token_forward",
+                        method=method,
+                        plan_id=plan_id,
+                        run_id=run_id,
+                        round_id=round_index,
+                        request_id=session.request_id,
+                        session_id=session.request_id,
+                        worker_id=job.worker_id,
+                        proposal_id=proposal.proposal_id,
+                        attribution="request",
+                        tokens_out=1,
+                    )
 
                 attach_proposals_to_batches(
                     plan.verify_batches,
-                    {request_id: proposal.proposal_id for request_id, proposal in proposals_by_request.items()},
+                    {
+                        request_id: [proposal.proposal_id for proposal in proposals]
+                        for request_id, proposals in proposals_by_request.items()
+                    },
                 )
                 proposals_by_id = {
                     proposal.proposal_id: proposal
-                    for proposal in proposals_by_request.values()
+                    for proposals in proposals_by_request.values()
+                    for proposal in proposals
                 }
                 for batch in plan.verify_batches:
                     proposals = [
@@ -181,6 +221,37 @@ class RuntimeEngine:
                         proposals,
                         verification_results,
                     )
+                    for verification_result in verification_results:
+                        response_timing = dict(verification_result.timing.get("response_timing") or {})
+                        self._record_detail_event_specs(
+                            logger,
+                            recorder,
+                            verification_result.timing.get("client_events", []),
+                            default_phase=None,
+                            method=method,
+                            plan_id=plan_id,
+                            run_id=run_id,
+                            round_id=round_index,
+                            request_id=verification_result.request_id,
+                            session_id=verification_result.request_id,
+                            batch_id=batch.batch_id,
+                            proposal_id=verification_result.proposal_id,
+                            attribution="request",
+                            metadata_base={
+                                "response_timing": response_timing,
+                                "client_serialize_ms": verification_result.timing.get("client_serialize_ms"),
+                                "client_deserialize_ms": verification_result.timing.get("client_deserialize_ms"),
+                                "client_http_total_ms": verification_result.timing.get("client_http_total_ms"),
+                                "request_bytes": verification_result.timing.get("request_bytes"),
+                                "response_bytes": verification_result.timing.get("response_bytes"),
+                                "modeled_upload_ms": verification_result.timing.get("modeled_upload_ms"),
+                                "modeled_downlink_ms": verification_result.timing.get("modeled_downlink_ms"),
+                                "network_or_queue_residual_ms": verification_result.timing.get(
+                                    "network_or_queue_residual_ms"
+                                ),
+                                "backend_name": verification_result.metadata.get("backend_name"),
+                            },
+                        )
                     self._record_span_event(
                         logger,
                         recorder,
@@ -195,31 +266,61 @@ class RuntimeEngine:
                         event_id_factory=recorder.next_event_id,
                     ):
                         logger.record(event)
-                    for proposal in proposals:
-                        verification_result = verification_results_by_id[proposal.proposal_id]
-                        proposal = proposals_by_id[verification_result.proposal_id]
-                        session = sessions_by_id[proposal.request_id]
-                        with recorder.span(
-                            phase="accept.apply",
-                            method=method,
-                            plan_id=plan_id,
-                            run_id=run_id,
-                            round_id=round_index,
-                            request_id=proposal.request_id,
-                            session_id=proposal.request_id,
-                            worker_id=proposal.worker_id,
-                            batch_id=batch.batch_id,
-                            proposal_id=proposal.proposal_id,
-                        ) as accept_span:
-                            accept_result = self.acceptance_policy.accept(proposal, verification_result, context)
-                        self._record_span_event(
-                            logger,
-                            recorder,
-                            accept_span,
-                            span_kind="leaf",
-                            attribution="request",
-                            metadata=dict(accept_result.metadata),
+                    for request_id, request_proposals in _group_proposals_by_request(proposals).items():
+                        accept_records = []
+                        for proposal in request_proposals:
+                            verification_result = verification_results_by_id[proposal.proposal_id]
+                            proposal = proposals_by_id[verification_result.proposal_id]
+                            with recorder.span(
+                                phase="accept.apply",
+                                method=method,
+                                plan_id=plan_id,
+                                run_id=run_id,
+                                round_id=round_index,
+                                request_id=proposal.request_id,
+                                session_id=proposal.request_id,
+                                worker_id=proposal.worker_id,
+                                batch_id=batch.batch_id,
+                                proposal_id=proposal.proposal_id,
+                                metadata={
+                                    "candidate_count": len(request_proposals),
+                                    "candidate_group_id": f"{proposal.request_id}:round{round_index}",
+                                },
+                            ) as accept_span:
+                                accept_result = self.acceptance_policy.accept(proposal, verification_result, context)
+                            accept_records.append((proposal, verification_result, accept_result, accept_span))
+
+                        winner = _commit_acceptance_if_supported(
+                            _select_accept_record(accept_records),
+                            acceptance_policy=self.acceptance_policy,
+                            context=context,
+                            draft_runners=draft_runners,
                         )
+                        accept_records = [
+                            winner
+                            if record[0].proposal_id == winner[0].proposal_id
+                            else record
+                            for record in accept_records
+                        ]
+                        for proposal, _verification_result, accept_result, accept_span in accept_records:
+                            accept_span.metadata.update(
+                                {
+                                    **dict(accept_result.metadata),
+                                    "candidate_winner": proposal.proposal_id == winner[0].proposal_id,
+                                    "candidate_output_len": len(accept_result.output_token_ids),
+                                }
+                            )
+                            self._record_span_event(
+                                logger,
+                                recorder,
+                                accept_span,
+                                span_kind="leaf",
+                                attribution="request",
+                                metadata=dict(accept_span.metadata),
+                            )
+
+                        proposal, _verification_result, accept_result, accept_span = winner
+                        session = sessions_by_id[request_id]
                         with recorder.span(
                             phase="session.append",
                             method=method,
@@ -245,7 +346,7 @@ class RuntimeEngine:
                             stalled.add(session.request_id)
                         request_results[session.request_id].output_token_ids = list(session.generated_ids)
                         request_results[session.request_id].stop_reason = accept_result.stop_reason
-                        draft_span = draft_spans_by_request[proposal.request_id]
+                        draft_span = draft_spans_by_proposal[proposal.proposal_id]
                         generation_start = _min_start_ns(draft_span, verify_span, accept_span, append_span)
                         generation_end = _max_end_ns(draft_span, verify_span, accept_span, append_span)
                         generation_span = recorder.record_completed(
@@ -295,7 +396,10 @@ class RuntimeEngine:
             return PlanHints()
         return self.planning_policy.plan(
             active_sessions=active_sessions,
-            resources={"draft_worker_ids": list(draft_runners)},
+            resources={
+                "draft_worker_ids": list(draft_runners),
+                "draft_worker_metadata": _draft_runner_metadata(draft_runners),
+            },
             history={},
             context=context,
         )
@@ -325,6 +429,79 @@ class RuntimeEngine:
             )
         )
 
+    def _record_detail_event_specs(
+        self,
+        logger: EventLogger,
+        recorder: TimingRecorder,
+        event_specs: Any,
+        *,
+        default_phase: str | None,
+        method: str,
+        plan_id: str,
+        run_id: str,
+        round_id: int,
+        request_id: str | None = None,
+        session_id: str | None = None,
+        worker_id: str | None = None,
+        batch_id: str | None = None,
+        proposal_id: str | None = None,
+        attribution: str | None = None,
+        tokens_in: int | None = None,
+        tokens_out: int | None = None,
+        metadata_base: dict[str, Any] | None = None,
+    ) -> None:
+        """把 draft/http 内部细粒度计时转成 non-leaf detail events。"""
+        if not isinstance(event_specs, list):
+            return
+        for event_spec in event_specs:
+            if not isinstance(event_spec, dict):
+                continue
+            start_ns = event_spec.get("start_ns")
+            end_ns = event_spec.get("end_ns")
+            if start_ns is None or end_ns is None:
+                continue
+            phase = str(event_spec.get("phase") or default_phase or "")
+            if not phase:
+                continue
+            base_metadata = dict(metadata_base or {})
+            if phase != "verify.http_total":
+                base_metadata.pop("response_timing", None)
+                base_metadata.pop("network_or_queue_residual_ms", None)
+            metadata = {
+                **base_metadata,
+                **dict(event_spec.get("metadata") or {}),
+                **{
+                    key: value
+                    for key, value in event_spec.items()
+                    if key not in {"start_ns", "end_ns", "metadata"}
+                },
+            }
+            detail_span = recorder.record_completed(
+                phase=phase,
+                method=method,
+                plan_id=plan_id,
+                run_id=run_id,
+                round_id=round_id,
+                request_id=request_id,
+                session_id=session_id,
+                worker_id=worker_id,
+                batch_id=batch_id,
+                proposal_id=proposal_id,
+                start_ns=int(start_ns),
+                end_ns=int(end_ns),
+                metadata=metadata,
+            )
+            self._record_span_event(
+                logger,
+                recorder,
+                detail_span,
+                span_kind="detail",
+                attribution=attribution,
+                tokens_in=tokens_in,
+                tokens_out=tokens_out,
+                metadata=metadata,
+            )
+
 
 def _method_label(context: RuntimeContext) -> str:
     """从 run_config 中取展示用 method 名称；不用于 runtime 分支。"""
@@ -342,6 +519,53 @@ def _max_end_ns(*spans: TimingSpan) -> int:
     if len(ends) != len(spans):
         raise ValueError("Cannot aggregate unfinished TimingSpan.")
     return max(int(end) for end in ends)
+
+
+def _draft_runner_metadata(draft_runners: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        worker_id: dict(getattr(runner, "metadata", {}) or {})
+        for worker_id, runner in draft_runners.items()
+    }
+
+
+def _plan_metadata(plan: Any, hints: PlanHints) -> dict[str, Any]:
+    return {
+        "plan_metadata": dict(getattr(plan, "metadata", {}) or {}),
+        "hints_metadata": dict(getattr(hints, "metadata", {}) or {}),
+        "planning_hints": dict(getattr(hints, "metadata", {}) or {}),
+        "draft_jobs": [
+            {
+                "request_id": job.request_id,
+                "worker_id": job.worker_id,
+                "max_tokens": job.budget.max_tokens,
+                "max_branches": job.budget.max_branches,
+                "metadata": dict(job.metadata or {}),
+            }
+            for job in getattr(plan, "draft_jobs", [])
+        ],
+        "verify_batches": [
+            {
+                "batch_id": batch.batch_id,
+                "request_ids": list(batch.request_ids),
+                "metadata": dict(batch.metadata or {}),
+            }
+            for batch in getattr(plan, "verify_batches", [])
+        ],
+        "worker_preferences": dict(getattr(hints, "worker_preferences", {}) or {}),
+        "candidate_worker_preferences": {
+            request_id: list(worker_ids)
+            for request_id, worker_ids in dict(getattr(hints, "candidate_worker_preferences", {}) or {}).items()
+        },
+        "candidate_draft_lengths": {
+            request_id: dict(worker_lengths or {})
+            for request_id, worker_lengths in dict(getattr(hints, "candidate_draft_lengths", {}) or {}).items()
+        },
+        "draft_lengths": dict(getattr(hints, "draft_lengths", {}) or {}),
+        "preferred_batches": [
+            list(batch)
+            for batch in getattr(hints, "preferred_batches", [])
+        ],
+    }
 
 
 def _validate_verification_results(
@@ -375,3 +599,50 @@ def _validate_verification_results(
             f"missing={missing}, duplicates={duplicates}, unknown={unknown}."
         )
     return results_by_id
+
+
+def _group_proposals_by_request(proposals: list[CandidateProposal]) -> dict[str, list[CandidateProposal]]:
+    grouped: dict[str, list[CandidateProposal]] = {}
+    for proposal in proposals:
+        grouped.setdefault(proposal.request_id, []).append(proposal)
+    return grouped
+
+
+def _select_accept_record(records: list[tuple[Any, Any, Any, TimingSpan]]) -> tuple[Any, Any, Any, TimingSpan]:
+    if not records:
+        raise ValueError("Cannot select from empty accept records.")
+    return max(records, key=_accept_record_score)
+
+
+def _commit_acceptance_if_supported(
+    record: tuple[Any, Any, Any, TimingSpan],
+    *,
+    acceptance_policy: Any,
+    context: RuntimeContext,
+    draft_runners: dict[str, Any] | None = None,
+) -> tuple[Any, Any, Any, TimingSpan]:
+    """Let stateful methods commit only the selected proposal."""
+    commit = getattr(acceptance_policy, "commit_acceptance", None)
+    if not callable(commit):
+        return record
+    proposal, verification_result, accept_result, accept_span = record
+    committed = commit(
+        proposal,
+        verification_result,
+        accept_result,
+        context,
+        draft_runners=draft_runners,
+    )
+    return proposal, verification_result, committed, accept_span
+
+
+def _accept_record_score(record: tuple[Any, Any, Any, TimingSpan]) -> tuple[int, int, int, int]:
+    proposal, _verification_result, accept_result, _accept_span = record
+    accepted_count = int(accept_result.metadata.get("accepted_count", len(accept_result.accepted_tokens)) or 0)
+    rejected_count = int(accept_result.metadata.get("rejected_count", len(accept_result.rejected_tokens)) or 0)
+    return (
+        len(accept_result.output_token_ids),
+        accepted_count,
+        -rejected_count,
+        -int(proposal.metadata.get("candidate_index", 0) or 0),
+    )

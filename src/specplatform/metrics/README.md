@@ -6,6 +6,7 @@ Allowed:
 - `PhaseEvent` recording.
 - system-level and request-attributed summaries.
 - CSV/JSON artifacts.
+- timing chart rendering from existing artifacts.
 
 Forbidden:
 - method-specific generation logic.
